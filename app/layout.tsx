@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import './globals.css'
+import Stepper from '@/components/Stepper'
 
 export const metadata: Metadata = {
   title: 'AdDrama AI · 广告导演',
@@ -9,7 +10,10 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="zh">
-      <body>{children}</body>
+      <body className="pt-16">
+        <Stepper />
+        {children}
+      </body>
     </html>
   )
 }
