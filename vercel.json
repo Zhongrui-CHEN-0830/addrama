@@ -1,0 +1,11 @@
+{
+  "framework": "nextjs",
+  "functions": {
+    "app/api/generate-ad/route.ts": {
+      "maxDuration": 60
+    },
+    "app/api/ad-status/[sessionId]/route.ts": {
+      "maxDuration": 15
+    }
+  }
+}
