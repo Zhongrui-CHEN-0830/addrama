@@ -3,6 +3,15 @@ import type { GenerateAdResponse, AdvertiserInput } from '@/types'
 const KIMI_BASE_URL = process.env.KIMI_BASE_URL!
 const KIMI_API_KEY = process.env.KIMI_API_KEY!
 
+function kimiMessagesUrl(): string {
+  const base = KIMI_BASE_URL.endsWith('/') ? KIMI_BASE_URL : `${KIMI_BASE_URL}/`
+  // Kimi Coding 的 Anthropic-compatible base URL 是 https://api.kimi.com/coding/，
+  // 但 Messages endpoint 仍然在 /v1/messages；Anthropic SDK 会自动拼 /v1/messages，
+  // 这里直接 fetch 时需要显式拼出来。
+  if (base.endsWith('/v1/')) return `${base}messages`
+  return `${base}v1/messages`
+}
+
 const KIMI_SYSTEM_PROMPT = `你是一个专业的广告策划 AI，擅长分析视频内容并生成场景化广告方案。请严格按照 JSON 格式输出，不要包含任何 Markdown 代码块或额外文字。`
 
 function buildKimiPrompt(advertiser: AdvertiserInput): string {
@@ -59,10 +68,11 @@ export async function analyzeVideoAndGenerateAd(
   mediaType: string,
   advertiser: AdvertiserInput
 ): Promise<GenerateAdResponse> {
-  const response = await fetch(`${KIMI_BASE_URL}messages`, {
+  const response = await fetch(kimiMessagesUrl(), {
     method: 'POST',
     headers: {
-      'Authorization': `Bearer ${KIMI_API_KEY}`,
+      'x-api-key': KIMI_API_KEY,
+      'anthropic-version': '2023-06-01',
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
@@ -98,6 +108,9 @@ export async function analyzeVideoAndGenerateAd(
 
   const data = await response.json()
   const content = data.content?.[0]?.text ?? data.choices?.[0]?.message?.content ?? ''
+  if (!content) {
+    throw new Error(`Kimi returned an empty response: ${JSON.stringify(data).slice(0, 500)}`)
+  }
 
   let parsed: Omit<GenerateAdResponse, 'sessionId' | 'sessionIdB'>
   try {

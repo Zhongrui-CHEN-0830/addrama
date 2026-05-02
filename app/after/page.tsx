@@ -7,6 +7,7 @@ import AdCard from '@/components/AdCard'
 import UserPreference from '@/components/UserPreference'
 import RhythmTimeline from '@/components/RhythmTimeline'
 import AdvertiserForm from '@/components/AdvertiserForm'
+import { getErrorMessage, isGenerateAdResponse } from '@/lib/ad-result'
 import type { GenerateAdResponse } from '@/types'
 
 export default function AfterPage() {
@@ -14,6 +15,7 @@ export default function AfterPage() {
   const videoRef = useRef<HTMLVideoElement>(null)
   const [videoUrl, setVideoUrl] = useState('')
   const [result, setResult] = useState<GenerateAdResponse | null>(null)
+  const [analysisError, setAnalysisError] = useState('')
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [currentSec, setCurrentSec] = useState(0)
   const [showAvoidBanner, setShowAvoidBanner] = useState(false)
@@ -57,10 +59,13 @@ export default function AfterPage() {
     const cached = sessionStorage.getItem('addrama_ad_result')
     if (cached) {
       try {
-        const data: GenerateAdResponse = JSON.parse(cached)
-        setResult(data)
-        startPolling(data.sessionId)
-        return
+        const data: unknown = JSON.parse(cached)
+        if (isGenerateAdResponse(data)) {
+          setResult(data)
+          startPolling(data.sessionId)
+          return
+        }
+        setAnalysisError(getErrorMessage(data))
       } catch {}
     }
 
@@ -71,13 +76,20 @@ export default function AfterPage() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ blobUrl }),
     })
-      .then(r => r.json())
+      .then(async r => {
+        const data: unknown = await r.json()
+        if (!r.ok || !isGenerateAdResponse(data)) {
+          throw new Error(getErrorMessage(data))
+        }
+        return data
+      })
       .then((data: GenerateAdResponse) => {
+        setAnalysisError('')
         setResult(data)
         sessionStorage.setItem('addrama_ad_result', JSON.stringify(data))
         startPolling(data.sessionId)
       })
-      .catch(console.error)
+      .catch(err => setAnalysisError((err as Error).message))
       .finally(() => setIsAnalyzing(false))
 
     return () => { if (pollingRef.current) clearInterval(pollingRef.current) }
@@ -122,8 +134,8 @@ export default function AfterPage() {
           ADDRAMA AI · 改造后体验
         </p>
         <h2 className="font-display text-3xl mb-1" style={{ color: 'var(--teal)' }}>AI 驱动广告</h2>
-        <p className="text-sm" style={{ color: 'var(--muted)' }}>
-          {isAnalyzing ? 'Kimi k2.6 正在分析视频…' : 'AI 已分析视频，将在合适时机展示场景化广告'}
+        <p className="text-sm" style={{ color: analysisError ? 'var(--red)' : 'var(--muted)' }}>
+          {analysisError || (isAnalyzing ? 'Kimi k2.6 正在分析视频…' : 'AI 已分析视频，将在合适时机展示场景化广告')}
         </p>
       </motion.div>
 

@@ -11,6 +11,7 @@ export async function POST(request: Request): Promise<NextResponse> {
       onBeforeGenerateToken: async (pathname) => ({
         allowedContentTypes: ['video/mp4', 'video/quicktime', 'video/webm'],
         maximumSizeInBytes: 100 * 1024 * 1024, // 100MB
+        addRandomSuffix: true,
         tokenPayload: JSON.stringify({ pathname }),
       }),
       onUploadCompleted: async ({ blob }) => {

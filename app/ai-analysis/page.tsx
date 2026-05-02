@@ -6,18 +6,25 @@ import { motion } from 'framer-motion'
 import AiPanel from '@/components/AiPanel'
 import AdFormatSelector from '@/components/AdFormatSelector'
 import RhythmTimeline from '@/components/RhythmTimeline'
+import { getErrorMessage, isGenerateAdResponse } from '@/lib/ad-result'
 import type { GenerateAdResponse } from '@/types'
 
 export default function AiAnalysisPage() {
   const router = useRouter()
   const [result, setResult] = useState<GenerateAdResponse | null>(null)
+  const [analysisError, setAnalysisError] = useState('')
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
     const cached = sessionStorage.getItem('addrama_ad_result')
     if (cached) {
       try {
-        setResult(JSON.parse(cached))
+        const parsed: unknown = JSON.parse(cached)
+        if (isGenerateAdResponse(parsed)) {
+          setResult(parsed)
+        } else {
+          setAnalysisError(getErrorMessage(parsed))
+        }
         setIsLoading(false)
         return
       } catch {}
@@ -28,7 +35,12 @@ export default function AiAnalysisPage() {
       const data = sessionStorage.getItem('addrama_ad_result')
       if (data) {
         try {
-          setResult(JSON.parse(data))
+          const parsed: unknown = JSON.parse(data)
+          if (isGenerateAdResponse(parsed)) {
+            setResult(parsed)
+          } else {
+            setAnalysisError(getErrorMessage(parsed))
+          }
           setIsLoading(false)
           clearInterval(interval)
         } catch {}
@@ -47,7 +59,9 @@ export default function AiAnalysisPage() {
           KIMI K2.6 · 视频场景理解
         </p>
         <h2 className="font-display text-3xl mb-1" style={{ color: 'var(--text)' }}>AI 决策面板</h2>
-        <p className="text-sm" style={{ color: 'var(--muted)' }}>透明展示 AI 如何理解剧情，决定广告时机与形式</p>
+        <p className="text-sm" style={{ color: analysisError ? 'var(--red)' : 'var(--muted)' }}>
+          {analysisError || '透明展示 AI 如何理解剧情，决定广告时机与形式'}
+        </p>
       </motion.div>
 
       <div className="grid grid-cols-1 gap-6">
