@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import { getRandomAd } from '@/lib/mock-ads'
+import { getErrorMessage, isGenerateAdResponse } from '@/lib/ad-result'
 import { chooseInsertPoint, formatMediaTime, TRADITIONAL_AD_SECONDS } from '@/lib/media-gate'
 import type { MockAd } from '@/types'
 
@@ -50,9 +51,23 @@ export default function BeforePage() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ blobUrl: url, frames, userPreferences }),
-    }).then(r => r.json()).then(data => {
-      sessionStorage.setItem('addrama_ad_result', JSON.stringify(data))
-    }).catch(console.error)
+    })
+      .then(async r => {
+        const data: unknown = await r.json()
+        if (!r.ok || !isGenerateAdResponse(data)) {
+          throw new Error(getErrorMessage(data))
+        }
+        return data
+      })
+      .then(data => {
+        sessionStorage.setItem('addrama_ad_result', JSON.stringify(data))
+      })
+      .catch(err => {
+        sessionStorage.setItem('addrama_ad_result', JSON.stringify({
+          error: (err as Error).message || 'AI 分析失败：未知错误',
+        }))
+        console.error(err)
+      })
   }, [router])
 
   useEffect(() => {

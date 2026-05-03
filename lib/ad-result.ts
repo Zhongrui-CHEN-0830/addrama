@@ -1,5 +1,10 @@
 import type { GenerateAdResponse } from '@/types'
 
+export type CachedAdResultState =
+  | { status: 'pending' }
+  | { status: 'ready'; result: GenerateAdResponse }
+  | { status: 'error'; error: string }
+
 export function isGenerateAdResponse(value: unknown): value is GenerateAdResponse {
   if (!value || typeof value !== 'object') return false
   const obj = value as Partial<GenerateAdResponse>
@@ -29,4 +34,21 @@ export function getErrorMessage(value: unknown): string {
     if (typeof error === 'string') return error
   }
   return 'AI 分析失败：服务端没有返回有效广告分析结果'
+}
+
+export function parseCachedAdResult(raw: string | null): CachedAdResultState {
+  if (!raw) return { status: 'pending' }
+
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(raw)
+  } catch {
+    return { status: 'error', error: 'AI 分析失败：缓存结果不是有效 JSON，请返回上一页重新生成。' }
+  }
+
+  if (isGenerateAdResponse(parsed)) {
+    return { status: 'ready', result: parsed }
+  }
+
+  return { status: 'error', error: getErrorMessage(parsed) }
 }

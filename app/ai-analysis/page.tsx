@@ -6,7 +6,7 @@ import { motion } from 'framer-motion'
 import AiPanel from '@/components/AiPanel'
 import AdFormatSelector from '@/components/AdFormatSelector'
 import RhythmTimeline from '@/components/RhythmTimeline'
-import { getErrorMessage, isGenerateAdResponse } from '@/lib/ad-result'
+import { parseCachedAdResult } from '@/lib/ad-result'
 import type { GenerateAdResponse } from '@/types'
 
 export default function AiAnalysisPage() {
@@ -16,34 +16,34 @@ export default function AiAnalysisPage() {
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
-    const cached = sessionStorage.getItem('addrama_ad_result')
-    if (cached) {
-      try {
-        const parsed: unknown = JSON.parse(cached)
-        if (isGenerateAdResponse(parsed)) {
-          window.setTimeout(() => setResult(parsed), 0)
-        } else {
-          window.setTimeout(() => setAnalysisError(getErrorMessage(parsed)), 0)
-        }
-        window.setTimeout(() => setIsLoading(false), 0)
-        return
-      } catch {}
+    function applyCachedResult(raw: string | null) {
+      const state = parseCachedAdResult(raw)
+      if (state.status === 'pending') return false
+      if (state.status === 'ready') {
+        setResult(state.result)
+        setAnalysisError('')
+      } else {
+        setResult(null)
+        setAnalysisError(state.error)
+      }
+      setIsLoading(false)
+      return true
     }
 
-    // If not ready yet, poll every 2s
+    if (applyCachedResult(sessionStorage.getItem('addrama_ad_result'))) return
+
+    // If not ready yet, poll every 2s. Stop with a clear message instead of spinning forever
+    // when the background request never writes a result (for example network/server crash).
+    const startedAt = Date.now()
     const interval = setInterval(() => {
-      const data = sessionStorage.getItem('addrama_ad_result')
-      if (data) {
-        try {
-          const parsed: unknown = JSON.parse(data)
-          if (isGenerateAdResponse(parsed)) {
-            setResult(parsed)
-          } else {
-            setAnalysisError(getErrorMessage(parsed))
-          }
-          setIsLoading(false)
-          clearInterval(interval)
-        } catch {}
+      if (applyCachedResult(sessionStorage.getItem('addrama_ad_result'))) {
+        clearInterval(interval)
+        return
+      }
+      if (Date.now() - startedAt > 120_000) {
+        setAnalysisError('AI 分析超时：后台还没有返回 Kimi 结果。请回到改造前页面重新触发分析，或检查 /api/generate-ad 服务端日志。')
+        setIsLoading(false)
+        clearInterval(interval)
       }
     }, 2000)
 
