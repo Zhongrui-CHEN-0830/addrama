@@ -6,7 +6,6 @@ import { motion, AnimatePresence } from 'framer-motion'
 import AdCard from '@/components/AdCard'
 import UserPreference from '@/components/UserPreference'
 import RhythmTimeline from '@/components/RhythmTimeline'
-import AdvertiserForm from '@/components/AdvertiserForm'
 import { getErrorMessage, isGenerateAdResponse } from '@/lib/ad-result'
 import { chooseInsertPoint, formatMediaTime, shouldTriggerNonSkippableAd } from '@/lib/media-gate'
 import { USER_AD_PREFERENCES_STORAGE_KEY } from '@/lib/user-preferences'
@@ -44,10 +43,10 @@ export default function AfterPage() {
 
     const poll = async () => {
       attempts++
-      if (attempts > 90) {
+      if (attempts > 225) {
         if (pollingRef.current) clearInterval(pollingRef.current)
         setIsPolling(false)
-        setPollingMessage('Libtv 生成仍在进行，可稍后刷新或打开项目画布查看。')
+        setPollingMessage('Libtv 超过 30 分钟仍未返回可播放视频。请打开项目画布确认任务是否失败/排队，当前 demo 将展示广告库与 AI 选择理由。')
         return
       }
 
@@ -58,6 +57,9 @@ export default function AfterPage() {
           const data = await res.json()
           if (data.status === 'done' && data.videoUrl) {
             setAdVideoUrl(data.videoUrl)
+            setVideoUrl(data.videoUrl)
+            setCurrentSec(0)
+            setVideoDuration(0)
             if (pollingRef.current) clearInterval(pollingRef.current)
             setIsPolling(false)
             setPollingMessage('Libtv 广告视频已生成。')
@@ -66,7 +68,7 @@ export default function AfterPage() {
           if (data.status === 'error') {
             setPollingMessage(`Libtv 查询失败：${data.error ?? '未知错误'}`)
           } else {
-            setPollingMessage(`Libtv 正在生成中，已等待约 ${Math.floor((attempts * 8) / 60)} 分 ${attempts * 8 % 60} 秒…`)
+            setPollingMessage(`Libtv 正在生成中，已等待约 ${Math.floor((attempts * 8) / 60)} 分 ${attempts * 8 % 60} 秒…若 10 分钟仍无视频，通常是 Libtv 排队/任务失败/返回字段变化；下方广告库展示不依赖生成视频。`)
           }
         } catch {
           setPollingMessage('Libtv 状态查询暂时失败，继续重试…')
@@ -202,7 +204,32 @@ export default function AfterPage() {
 
       <div className="relative rounded-xl overflow-hidden mb-3" style={{ background: '#000', aspectRatio: '16/9' }}>
         {videoUrl && (
-          <video ref={videoRef} src={videoUrl} className="w-full h-full object-contain" autoPlay controls />
+          <video
+            key={videoUrl}
+            ref={videoRef}
+            src={videoUrl}
+            className="w-full h-full object-contain"
+            autoPlay
+            controls
+          />
+        )}
+
+        {adVideoUrl && (
+          <div
+            className="absolute top-3 left-3 px-3 py-1 rounded-full text-xs font-bold"
+            style={{ background: 'var(--teal)', color: '#000' }}
+          >
+            Libtv 广告视频已生成，已覆盖原上传视频
+          </div>
+        )}
+
+        {!adVideoUrl && isPolling && (
+          <div
+            className="absolute bottom-3 left-3 right-3 px-3 py-2 rounded-lg text-xs"
+            style={{ background: 'rgba(0,0,0,0.72)', border: '1px solid var(--teal)', color: 'var(--teal)' }}
+          >
+            Libtv/Seedance 正在生成广告视频；生成后会在此区域直接覆盖原上传视频。
+          </div>
         )}
 
         <AnimatePresence>
@@ -236,7 +263,7 @@ export default function AfterPage() {
           <span className="text-xs tabular-nums" style={{ color: 'var(--muted)' }}>{formatMediaTime(videoDuration)}</span>
         </div>
         <p className="text-[10px] mt-2" style={{ color: 'var(--gold)' }}>
-          推荐广告插入点：{formatMediaTime(insertPoint)}。评委可拖动进度条快速定位，达到插入点后会触发不可跳过广告门禁。
+          推荐广告插入点：{formatMediaTime(insertPoint)}。评委可拖动进度条快速定位，达到插入点后会触发不可跳过广告门禁。{adVideoUrl ? ' 当前播放器内容为 Libtv 生成广告视频。' : ''}
         </p>
       </div>
 
@@ -265,11 +292,6 @@ export default function AfterPage() {
         </div>
       )}
 
-      {result && (
-        <div className="mb-4">
-          <AdvertiserForm />
-        </div>
-      )}
 
       <AnimatePresence>
         {showAdCard && result && (
@@ -277,7 +299,7 @@ export default function AfterPage() {
             <AdCard
               adCopy={result.adCopyA}
               interactiveQuestion={result.interactiveQuestion}
-              videoUrl={adVideoUrl || undefined}
+              selectedAdvertiser={result.selectedAdvertiser}
               isLoading={isPolling && !adVideoUrl}
               onInteract={handleAdInteract}
               onComplete={resumeVideo}

@@ -7,21 +7,24 @@ import {
   getAdGateRemainingSeconds,
   NON_SKIPPABLE_AD_SECONDS,
 } from '@/lib/media-gate'
+import { getAdvertiserLibraryWithSelection } from '@/lib/ad-library'
+import type { SelectedAdvertiser } from '@/types'
 
 interface AdCardProps {
   adCopy: string
   interactiveQuestion: string
-  videoUrl?: string
+  selectedAdvertiser?: SelectedAdvertiser
   isLoading?: boolean
   onInteract: (choice: 'interact' | 'watch' | 'later') => void
   onComplete?: () => void
 }
 
-export default function AdCard({ adCopy, interactiveQuestion, videoUrl, isLoading, onInteract, onComplete }: AdCardProps) {
+export default function AdCard({ adCopy, interactiveQuestion, selectedAdvertiser, isLoading, onInteract, onComplete }: AdCardProps) {
   const [startedAtMs] = useState(() => Date.now())
   const [nowMs, setNowMs] = useState(() => Date.now())
   const remaining = getAdGateRemainingSeconds(startedAtMs, nowMs)
   const canDismiss = canDismissNonSkippableAd(startedAtMs, nowMs)
+  const advertiserLibrary = getAdvertiserLibraryWithSelection(selectedAdvertiser)
 
   useEffect(() => {
     const timer = window.setInterval(() => setNowMs(Date.now()), 250)
@@ -42,53 +45,67 @@ export default function AdCard({ adCopy, interactiveQuestion, videoUrl, isLoadin
       className="rounded-xl overflow-hidden"
       style={{ border: '1px solid var(--teal)', background: 'linear-gradient(135deg, #060e0a, #0a1a12)' }}
     >
-      <div className="relative" style={{ aspectRatio: '16/9', background: '#000' }}>
-        {videoUrl ? (
-          <video src={videoUrl} autoPlay controls className="w-full h-full object-cover" />
-        ) : (
-          <div className="w-full h-full flex flex-col items-center justify-center gap-3 px-6 text-center">
-            {isLoading ? (
-              <>
-                <motion.div
-                  animate={{ rotate: 360 }}
-                  transition={{ duration: 1.5, repeat: Infinity, ease: 'linear' }}
-                  className="w-8 h-8 rounded-full border-2 border-t-transparent"
-                  style={{ borderColor: 'var(--teal)', borderTopColor: 'transparent' }}
-                />
-                <p className="text-sm font-mono-syne" style={{ color: 'var(--teal)' }}>
-                  Libtv/Seedance 正在异步渲染广告，通常需要数分钟…
-                </p>
-                <p className="text-[10px]" style={{ color: 'var(--muted)' }}>
-                  生成完成后将自动替换为可播放广告视频；当前先展示 AI 生成的广告卡片。
-                </p>
-              </>
-            ) : (
-              <div className="text-4xl opacity-30">🎬</div>
-            )}
-          </div>
-        )}
-        <div className="absolute top-3 right-3 px-3 py-1 rounded-full text-xs font-bold"
-          style={{ background: canDismiss ? 'var(--teal)' : 'var(--red)', color: canDismiss ? '#000' : '#fff' }}>
-          {canDismiss ? '可继续观看' : `不可跳过 ${remaining}s`}
-        </div>
-      </div>
-
-      <div className="p-4">
-        <div className="flex items-center justify-between mb-2">
+      <div className="p-4 border-b" style={{ borderColor: 'var(--border)' }}>
+        <div className="flex items-center justify-between gap-3 mb-3">
           <span className="text-[10px] font-bold px-2 py-0.5 rounded-full"
             style={{ background: 'var(--teal)', color: '#000' }}>
             ✦ AI 已避开关键剧情点
           </span>
-          <span className="text-[10px] font-mono-syne" style={{ color: 'var(--muted)' }}>
-            {canDismiss ? '已满足展示时长' : `至少观看 ${NON_SKIPPABLE_AD_SECONDS} 秒`}
+          <span className="text-[10px] font-bold px-3 py-1 rounded-full"
+            style={{ background: canDismiss ? 'var(--teal)' : 'var(--red)', color: canDismiss ? '#000' : '#fff' }}>
+            {canDismiss ? '可继续观看' : `不可跳过 ${remaining}s`}
           </span>
         </div>
 
         <p className="font-bold text-sm mb-1" style={{ color: 'var(--text)' }}>{adCopy}</p>
         <p className="text-xs mb-1" style={{ color: 'var(--muted)' }}>{interactiveQuestion}</p>
-        <p className="text-[10px] font-mono-syne mb-4" style={{ color: 'var(--gold)' }}>
-          Kimi 已根据当前剧情选择广告素材与形式；Libtv/Seedance 负责异步渲染广告视频
+        <p className="text-[10px] font-mono-syne" style={{ color: 'var(--gold)' }}>
+          {isLoading
+            ? 'Libtv/Seedance 视频仍在异步生成；生成后会覆盖上方播放器，当前广告卡展示广告库与 AI 选择理由。'
+            : `该广告至少观看 ${NON_SKIPPABLE_AD_SECONDS} 秒后可继续。`}
         </p>
+      </div>
+
+      <div className="p-4">
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <p className="text-[9px] font-bold tracking-widest uppercase" style={{ color: 'var(--muted)' }}>AD LIBRARY</p>
+            <h3 className="font-bold text-sm" style={{ color: 'var(--teal)' }}>广告库 · AI 实时匹配</h3>
+          </div>
+          {selectedAdvertiser && (
+            <div className="text-right">
+              <p className="text-[10px]" style={{ color: 'var(--muted)' }}>当前选中</p>
+              <p className="text-xs font-bold" style={{ color: 'var(--gold)' }}>
+                {selectedAdvertiser.industry} · {selectedAdvertiser.brandName}
+              </p>
+            </div>
+          )}
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mb-4">
+          {advertiserLibrary.map(asset => (
+            <div
+              key={asset.id}
+              className="rounded-lg p-3"
+              style={{
+                background: asset.selected ? 'var(--teal-dim)' : 'rgba(255,255,255,0.03)',
+                border: asset.selected ? '1px solid var(--teal)' : '1px solid var(--border)',
+              }}
+            >
+              <div className="flex items-start justify-between gap-2 mb-1">
+                <div>
+                  <p className="text-[10px]" style={{ color: asset.selected ? 'var(--teal)' : 'var(--muted)' }}>{asset.industry}</p>
+                  <p className="font-bold text-xs" style={{ color: 'var(--text)' }}>{asset.brandName} · {asset.productName}</p>
+                </div>
+                {asset.selected && <span className="text-[10px] font-bold" style={{ color: 'var(--teal)' }}>AI 选中</span>}
+              </div>
+              <p className="text-[10px] line-clamp-2" style={{ color: 'var(--muted)' }}>{asset.keySellingPoint}</p>
+              {asset.selected && asset.matchReason && (
+                <p className="text-[10px] mt-2" style={{ color: 'var(--gold)' }}>选择理由：{asset.matchReason}</p>
+              )}
+            </div>
+          ))}
+        </div>
 
         <div className="flex gap-2">
           <button

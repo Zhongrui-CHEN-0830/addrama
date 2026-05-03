@@ -127,8 +127,8 @@ describe('libtv helpers', () => {
         role: 'tool',
         content: JSON.stringify({
           task_result: {
-            videos: [{ previewPath: 'https://libtv-res.liblib.art/claw/p/b.mp4' }],
-            images: [{ previewPath: 'https://libtv-res.liblib.art/claw/p/c.png' }],
+            videos: [{ downloadUrl: 'https://libtv-res.liblib.art/claw/p/b.mp4' }],
+            images: [{ path: 'https://libtv-res.liblib.art/claw/p/c.png' }],
           },
         }),
       },

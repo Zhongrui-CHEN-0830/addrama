@@ -57,16 +57,16 @@ export function extractGeneratedMediaUrls(messages: Array<{ role?: string; conte
       try {
         const data = JSON.parse(content) as {
           task_result?: {
-            images?: Array<{ previewPath?: string; url?: string }>
-            videos?: Array<{ previewPath?: string; url?: string }>
+            videos?: Array<{ previewPath?: string; url?: string; path?: string; downloadUrl?: string }>
+            images?: Array<{ previewPath?: string; url?: string; path?: string; downloadUrl?: string }>
           }
         }
         for (const video of data.task_result?.videos ?? []) {
-          const url = video.previewPath ?? video.url
+          const url = video.previewPath ?? video.url ?? video.path ?? video.downloadUrl
           if (url) urls.push(url)
         }
         for (const image of data.task_result?.images ?? []) {
-          const url = image.previewPath ?? image.url
+          const url = image.previewPath ?? image.url ?? image.path ?? image.downloadUrl
           if (url) urls.push(url)
         }
       } catch {

@@ -1,4 +1,5 @@
 export const NON_SKIPPABLE_AD_SECONDS = 8
+export const TRADITIONAL_AD_SECONDS = 30
 
 export function chooseInsertPoint(
   recommendedInsertPoints: number[] | undefined,

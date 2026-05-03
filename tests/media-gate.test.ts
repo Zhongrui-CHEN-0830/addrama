@@ -7,6 +7,7 @@ import {
   formatMediaTime,
   getAdGateRemainingSeconds,
   NON_SKIPPABLE_AD_SECONDS,
+  TRADITIONAL_AD_SECONDS,
   shouldTriggerNonSkippableAd,
 } from '../lib/media-gate'
 import { DEFAULT_PRODUCT_DOC, normalizeProductDoc } from '../lib/product-doc'
@@ -31,12 +32,16 @@ describe('media gate helpers', () => {
     assert.equal(shouldTriggerNonSkippableAd({ currentTime: 20, insertPoint: 12, alreadyTriggered: true }), false)
   })
 
-  it('keeps ad locked for the configured non-skippable duration', () => {
+  it('keeps AI ad locked for the configured non-skippable duration', () => {
     assert.equal(NON_SKIPPABLE_AD_SECONDS, 8)
     assert.equal(getAdGateRemainingSeconds(1_000, 1_000), 8)
     assert.equal(getAdGateRemainingSeconds(1_000, 4_900), 5)
     assert.equal(canDismissNonSkippableAd(1_000, 8_900), false)
     assert.equal(canDismissNonSkippableAd(1_000, 9_000), true)
+  })
+
+  it('keeps traditional before-page ads locked for 30 seconds', () => {
+    assert.equal(TRADITIONAL_AD_SECONDS, 30)
   })
 })
 

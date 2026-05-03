@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import { getRandomAd } from '@/lib/mock-ads'
+import { chooseInsertPoint, formatMediaTime, TRADITIONAL_AD_SECONDS } from '@/lib/media-gate'
 import type { MockAd } from '@/types'
 
 const EMOTIONS = [
@@ -15,21 +16,18 @@ const EMOTIONS = [
   '😤 剧情还没完呢！',
 ]
 
-function getTraditionalAdTriggerSecond(duration: number) {
-  if (!Number.isFinite(duration) || duration <= 0) return 20
-  return Math.min(20, Math.max(1, duration * 0.6))
-}
-
 export default function BeforePage() {
   const router = useRouter()
   const videoRef = useRef<HTMLVideoElement>(null)
   const hasTriggeredAdRef = useRef(false)
   const [videoUrl, setVideoUrl] = useState('')
   const [adActive, setAdActive] = useState(false)
-  const [adCountdown, setAdCountdown] = useState(30)
+  const [adCountdown, setAdCountdown] = useState(TRADITIONAL_AD_SECONDS)
   const [ad, setAd] = useState<MockAd | null>(null)
   const [bubbles, setBubbles] = useState<Array<{ id: number; text: string; x: number; y: number }>>([])
   const [showNext, setShowNext] = useState(false)
+  const [currentSec, setCurrentSec] = useState(0)
+  const [videoDuration, setVideoDuration] = useState(0)
 
   const triggerTraditionalAd = useCallback(() => {
     if (hasTriggeredAdRef.current) return
@@ -37,7 +35,7 @@ export default function BeforePage() {
     videoRef.current?.pause()
     setAd(getRandomAd())
     setAdActive(true)
-    setAdCountdown(30)
+    setAdCountdown(TRADITIONAL_AD_SECONDS)
   }, [])
 
   useEffect(() => {
@@ -48,7 +46,6 @@ export default function BeforePage() {
     const frames = JSON.parse(sessionStorage.getItem('addrama_video_frames') ?? '[]')
     const userPreferences = sessionStorage.getItem('addrama_user_ad_preferences')
 
-    // Start background Kimi analysis
     fetch('/api/generate-ad', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -58,27 +55,30 @@ export default function BeforePage() {
     }).catch(console.error)
   }, [router])
 
-  // Traditional ad trigger. Long videos use 20s; short videos trigger at 60% duration.
   useEffect(() => {
     const video = videoRef.current
     if (!video || !videoUrl) return
 
+    const updateMetadata = () => setVideoDuration(Number.isFinite(video.duration) ? video.duration : 0)
     const handleTimeUpdate = () => {
-      const triggerAt = getTraditionalAdTriggerSecond(video.duration)
+      setCurrentSec(video.currentTime)
+      updateMetadata()
+      const triggerAt = chooseInsertPoint(undefined, video.duration)
       if (video.currentTime >= triggerAt) {
         triggerTraditionalAd()
       }
     }
 
+    video.addEventListener('loadedmetadata', updateMetadata)
     video.addEventListener('timeupdate', handleTimeUpdate)
     video.addEventListener('ended', triggerTraditionalAd)
     return () => {
+      video.removeEventListener('loadedmetadata', updateMetadata)
       video.removeEventListener('timeupdate', handleTimeUpdate)
       video.removeEventListener('ended', triggerTraditionalAd)
     }
   }, [triggerTraditionalAd, videoUrl])
 
-  // Emotion bubbles
   useEffect(() => {
     if (!adActive) return
     let counter = 0
@@ -93,7 +93,6 @@ export default function BeforePage() {
     return () => clearInterval(interval)
   }, [adActive])
 
-  // Ad countdown
   useEffect(() => {
     if (!adActive) return
     if (adCountdown <= 0) {
@@ -108,19 +107,28 @@ export default function BeforePage() {
     return () => clearTimeout(t)
   }, [adActive, adCountdown])
 
+  function handleSeek(value: string) {
+    const next = Number(value)
+    const video = videoRef.current
+    if (!video || !Number.isFinite(next)) return
+    video.currentTime = next
+    setCurrentSec(next)
+  }
+
+  const insertPoint = chooseInsertPoint(undefined, videoDuration)
+
   return (
     <main className="min-h-screen p-6 max-w-4xl mx-auto">
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mb-4">
         <h2 className="font-display text-3xl mb-1" style={{ color: 'var(--red)' }}>改造前体验</h2>
-        <p className="text-sm" style={{ color: 'var(--muted)' }}>传统广告：无关内容，粗暴打断</p>
+        <p className="text-sm" style={{ color: 'var(--muted)' }}>传统广告：无关内容，粗暴打断，强制观看 30 秒</p>
       </motion.div>
 
-      <div className="relative rounded-xl overflow-hidden" style={{ background: '#000', aspectRatio: '16/9' }}>
+      <div className="relative rounded-xl overflow-hidden mb-3" style={{ background: '#000', aspectRatio: '16/9' }}>
         {videoUrl && (
-          <video ref={videoRef} src={videoUrl} className="w-full h-full object-contain" autoPlay muted />
+          <video ref={videoRef} src={videoUrl} className="w-full h-full object-contain" autoPlay controls />
         )}
 
-        {/* Ad overlay */}
         <AnimatePresence>
           {adActive && ad && (
             <motion.div
@@ -132,7 +140,7 @@ export default function BeforePage() {
             >
               <div className="text-center px-8">
                 <p className="text-xs font-mono-syne mb-4" style={{ color: 'var(--muted)' }}>
-                  广告 · {adCountdown > 0 ? `不可跳过 · 剩余 ${adCountdown} 秒` : '广告结束'}
+                  广告 · 不可跳过 · 剩余 {Math.max(0, adCountdown)} 秒
                 </p>
                 <p className="font-bold text-xl mb-2" style={{ color: 'var(--text)' }}>{ad.title}</p>
                 <p className="text-sm mb-1" style={{ color: 'var(--muted)' }}>{ad.subtitle}</p>
@@ -142,7 +150,6 @@ export default function BeforePage() {
                 <p className="text-xs mt-1" style={{ color: 'var(--muted)' }}>品类：{ad.category}</p>
               </div>
 
-              {/* Emotion bubbles */}
               {bubbles.map(b => (
                 <motion.div
                   key={b.id}
@@ -166,6 +173,26 @@ export default function BeforePage() {
             </motion.div>
           )}
         </AnimatePresence>
+      </div>
+
+      <div className="mb-4 rounded-xl p-3" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+        <div className="flex items-center gap-3">
+          <span className="text-xs tabular-nums" style={{ color: 'var(--muted)' }}>{formatMediaTime(currentSec)}</span>
+          <input
+            type="range"
+            min="0"
+            max={Math.max(1, videoDuration)}
+            value={Math.min(currentSec, Math.max(1, videoDuration))}
+            step="0.1"
+            onChange={event => handleSeek(event.target.value)}
+            className="flex-1 accent-[var(--red)]"
+            aria-label="改造前视频进度条"
+          />
+          <span className="text-xs tabular-nums" style={{ color: 'var(--muted)' }}>{formatMediaTime(videoDuration)}</span>
+        </div>
+        <p className="text-[10px] mt-2" style={{ color: 'var(--red)' }}>
+          传统广告插入点：{formatMediaTime(insertPoint)}。评委可拖动进度条快速定位；达到插入点后必须完整观看 {TRADITIONAL_AD_SECONDS} 秒广告。
+        </p>
       </div>
 
       {showNext && (
