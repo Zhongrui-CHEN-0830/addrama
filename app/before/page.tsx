@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import { getRandomAd } from '@/lib/mock-ads'
@@ -15,9 +15,15 @@ const EMOTIONS = [
   '😤 剧情还没完呢！',
 ]
 
+function getTraditionalAdTriggerSecond(duration: number) {
+  if (!Number.isFinite(duration) || duration <= 0) return 20
+  return Math.min(20, Math.max(1, duration * 0.6))
+}
+
 export default function BeforePage() {
   const router = useRouter()
   const videoRef = useRef<HTMLVideoElement>(null)
+  const hasTriggeredAdRef = useRef(false)
   const [videoUrl, setVideoUrl] = useState('')
   const [adActive, setAdActive] = useState(false)
   const [adCountdown, setAdCountdown] = useState(30)
@@ -25,10 +31,19 @@ export default function BeforePage() {
   const [bubbles, setBubbles] = useState<Array<{ id: number; text: string; x: number; y: number }>>([])
   const [showNext, setShowNext] = useState(false)
 
+  const triggerTraditionalAd = useCallback(() => {
+    if (hasTriggeredAdRef.current) return
+    hasTriggeredAdRef.current = true
+    videoRef.current?.pause()
+    setAd(getRandomAd())
+    setAdActive(true)
+    setAdCountdown(30)
+  }, [])
+
   useEffect(() => {
     const url = sessionStorage.getItem('addrama_blob_url')
     if (!url) { router.push('/'); return }
-    setVideoUrl(url)
+    window.setTimeout(() => setVideoUrl(url), 0)
 
     // Start background Kimi analysis
     fetch('/api/generate-ad', {
@@ -40,21 +55,25 @@ export default function BeforePage() {
     }).catch(console.error)
   }, [router])
 
-  // Ad trigger at 20s
+  // Traditional ad trigger. Long videos use 20s; short videos trigger at 60% duration.
   useEffect(() => {
     const video = videoRef.current
-    if (!video) return
-    const handler = () => {
-      if (video.currentTime >= 20 && !adActive) {
-        video.pause()
-        setAd(getRandomAd())
-        setAdActive(true)
-        setAdCountdown(30)
+    if (!video || !videoUrl) return
+
+    const handleTimeUpdate = () => {
+      const triggerAt = getTraditionalAdTriggerSecond(video.duration)
+      if (video.currentTime >= triggerAt) {
+        triggerTraditionalAd()
       }
     }
-    video.addEventListener('timeupdate', handler)
-    return () => video.removeEventListener('timeupdate', handler)
-  }, [adActive])
+
+    video.addEventListener('timeupdate', handleTimeUpdate)
+    video.addEventListener('ended', triggerTraditionalAd)
+    return () => {
+      video.removeEventListener('timeupdate', handleTimeUpdate)
+      video.removeEventListener('ended', triggerTraditionalAd)
+    }
+  }, [triggerTraditionalAd, videoUrl])
 
   // Emotion bubbles
   useEffect(() => {
@@ -75,10 +94,12 @@ export default function BeforePage() {
   useEffect(() => {
     if (!adActive) return
     if (adCountdown <= 0) {
-      setAdActive(false)
-      setShowNext(true)
-      videoRef.current?.play()
-      return
+      const t = setTimeout(() => {
+        setAdActive(false)
+        setShowNext(true)
+        videoRef.current?.play().catch(() => {})
+      }, 0)
+      return () => clearTimeout(t)
     }
     const t = setTimeout(() => setAdCountdown(c => c - 1), 1000)
     return () => clearTimeout(t)
@@ -108,7 +129,7 @@ export default function BeforePage() {
             >
               <div className="text-center px-8">
                 <p className="text-xs font-mono-syne mb-4" style={{ color: 'var(--muted)' }}>
-                  广告 · {adCountdown > 0 ? `${adCountdown} 秒后可跳过` : '广告结束'}
+                  广告 · {adCountdown > 0 ? `不可跳过 · 剩余 ${adCountdown} 秒` : '广告结束'}
                 </p>
                 <p className="font-bold text-xl mb-2" style={{ color: 'var(--text)' }}>{ad.title}</p>
                 <p className="text-sm mb-1" style={{ color: 'var(--muted)' }}>{ad.subtitle}</p>
