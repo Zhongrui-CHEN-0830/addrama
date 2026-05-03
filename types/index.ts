@@ -28,6 +28,29 @@ export type AdFormat =
   | 'drama-style'
   | 'end-card'
 
+export interface AdvertiserAsset {
+  id: string
+  industry: string
+  brandName: string
+  productName: string
+  sourceMaterial: string
+  keySellingPoint: string
+  targetAudience: string
+  brandTone: string
+  bannedWords: string
+  suitableScenes: string[]
+  suitableFormats: AdFormat[]
+  budgetTier: 'low' | 'medium' | 'high'
+}
+
+export interface SelectedAdvertiser {
+  id: string
+  industry: string
+  brandName: string
+  productName: string
+  matchReason: string
+}
+
 export interface GenerateAdResponse {
   sessionId: string
   sessionIdB?: string
@@ -39,6 +62,14 @@ export interface GenerateAdResponse {
   fifteenSecScript: string
   adFormat: AdFormat
   adFormatReason: string
+  selectedAdvertiser?: SelectedAdvertiser
+  libtv?: {
+    attempted: boolean
+    status: 'not-configured' | 'queued' | 'error'
+    error?: string
+    projectUrlA?: string
+    projectUrlB?: string
+  }
   sceneAnalysis: SceneAnalysis
   rhythmTimeline: RhythmTimeline
 }
@@ -47,6 +78,7 @@ export interface AdStatusResponse {
   status: 'pending' | 'done' | 'error'
   videoUrl?: string
   projectUrl?: string
+  error?: string
 }
 
 export interface MockAd {

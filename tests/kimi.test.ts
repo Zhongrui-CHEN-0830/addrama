@@ -4,8 +4,20 @@ import { describe, it } from 'node:test'
 import {
   buildKimiContentBlocks,
   buildFrameAnalysisPrompt,
+  buildKimiPrompt,
   kimiMessagesUrl,
 } from '../lib/kimi-url'
+import { MOCK_ADVERTISERS } from '../lib/mock-advertisers'
+import {
+  extractGeneratedMediaUrls,
+  isLibtvConfigured,
+  buildProjectUrl,
+} from '../lib/libtv'
+import {
+  DEFAULT_USER_AD_PREFERENCES,
+  serializeUserAdPreferences,
+  parseUserAdPreferences,
+} from '../lib/user-preferences'
 
 describe('kimiMessagesUrl', () => {
   it('throws a clear configuration error when KIMI_BASE_URL is missing', () => {
@@ -72,5 +84,86 @@ describe('buildFrameAnalysisPrompt', () => {
     assert.match(prompt, /抽帧时间点：0\.0s, 8\.0s, 16\.0s/)
     assert.match(prompt, /recommendedInsertPoints/)
     assert.match(prompt, /必须优先从上述抽帧时间点附近选择/)
+  })
+})
+
+describe('buildKimiPrompt', () => {
+  it('requires Kimi to select a mock advertiser asset before rewriting the ad', () => {
+    const prompt = buildKimiPrompt({
+      adLibrary: MOCK_ADVERTISERS,
+      userPreferences: DEFAULT_USER_AD_PREFERENCES,
+    })
+
+    assert.match(prompt, /必须先从广告库中选择一个最匹配的广告素材/)
+    assert.match(prompt, /selectedAdvertiser/)
+    assert.match(prompt, /beauty-peach-makeup/)
+    assert.match(prompt, /buffer-card/)
+    assert.match(prompt, /end-card/)
+  })
+})
+
+describe('libtv helpers', () => {
+  it('detects missing and present Libtv access keys', () => {
+    assert.equal(isLibtvConfigured(''), false)
+    assert.equal(isLibtvConfigured(undefined), false)
+    assert.equal(isLibtvConfigured('abc'), true)
+  })
+
+  it('builds project canvas URLs from projectUuid', () => {
+    assert.equal(
+      buildProjectUrl(' project-123 '),
+      'https://www.liblib.tv/canvas?projectId=project-123'
+    )
+  })
+
+  it('extracts generated video URLs from assistant text and tool task_result payloads', () => {
+    const urls = extractGeneratedMediaUrls([
+      {
+        role: 'assistant',
+        content: '结果：https://libtv-res.liblib.art/claw/p/a.mp4',
+      },
+      {
+        role: 'tool',
+        content: JSON.stringify({
+          task_result: {
+            videos: [{ previewPath: 'https://libtv-res.liblib.art/claw/p/b.mp4' }],
+            images: [{ previewPath: 'https://libtv-res.liblib.art/claw/p/c.png' }],
+          },
+        }),
+      },
+      {
+        role: 'assistant',
+        content: '重复 https://libtv-res.liblib.art/claw/p/a.mp4',
+      },
+    ])
+
+    assert.deepEqual(urls, [
+      'https://libtv-res.liblib.art/claw/p/a.mp4',
+      'https://libtv-res.liblib.art/claw/p/b.mp4',
+      'https://libtv-res.liblib.art/claw/p/c.png',
+    ])
+  })
+})
+
+describe('user preference helpers', () => {
+  it('round-trips demo user ad preferences through sessionStorage-safe JSON', () => {
+    const encoded = serializeUserAdPreferences({
+      ...DEFAULT_USER_AD_PREFERENCES,
+      useful: true,
+      boring: false,
+      preferredCategories: ['美妆护肤'],
+      blockedCategories: ['游戏娱乐'],
+      preferredFormats: ['interactive', 'end-card'],
+      lastUpdatedAt: '2026-05-03T00:00:00.000Z',
+    })
+
+    assert.deepEqual(parseUserAdPreferences(encoded), {
+      useful: true,
+      boring: false,
+      preferredCategories: ['美妆护肤'],
+      blockedCategories: ['游戏娱乐'],
+      preferredFormats: ['interactive', 'end-card'],
+      lastUpdatedAt: '2026-05-03T00:00:00.000Z',
+    })
   })
 })

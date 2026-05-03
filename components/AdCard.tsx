@@ -57,7 +57,7 @@ export default function AdCard({ adCopy, interactiveQuestion, videoUrl, isLoadin
         <p className="font-bold text-sm mb-1" style={{ color: 'var(--text)' }}>{adCopy}</p>
         <p className="text-xs mb-1" style={{ color: 'var(--muted)' }}>{interactiveQuestion}</p>
         <p className="text-[10px] font-mono-syne mb-4" style={{ color: 'var(--gold)' }}>
-          Claude 已根据当前剧情生成专属文案，广告由 Seedance 2.0 生成
+          Kimi 已根据当前剧情选择广告素材与形式；Libtv/Seedance 负责异步渲染广告视频
         </p>
 
         <div className="flex gap-2">
