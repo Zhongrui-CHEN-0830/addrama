@@ -41,6 +41,13 @@ export interface AdvertiserAsset {
   suitableScenes: string[]
   suitableFormats: AdFormat[]
   budgetTier: 'low' | 'medium' | 'high'
+  assetVisualElements: string[]
+  usageScenarios: string[]
+  emotionalMapping: string[]
+  cameraSuggestions: string[]
+  audioSuggestions: string[]
+  forbiddenRepresentations: string[]
+  formatFit: Partial<Record<AdFormat, string>>
 }
 
 export interface SelectedAdvertiser {
@@ -49,6 +56,75 @@ export interface SelectedAdvertiser {
   brandName: string
   productName: string
   matchReason: string
+}
+
+export interface EmotionCurvePoint {
+  timeRange: string
+  emotion: string
+  intensity: number
+}
+
+export interface VideoSceneUnderstanding {
+  sceneType: string
+  emotionCurve: EmotionCurvePoint[]
+  rhythmTimeline: RhythmTimeline
+  visualMotifs: string[]
+  characterState: string
+  adInsertionRisk: 'high' | 'medium' | 'low'
+  bestInsertReason: string
+}
+
+export interface AdDirectionShot {
+  shot: number
+  timeRange: string
+  visual: string
+  camera: string
+  transition: string
+  productRole: string
+  subtitle: string
+  voiceover: string
+  sound: string
+}
+
+export interface SubtitleLine {
+  timeRange: string
+  text: string
+  maxChars?: number
+}
+
+export interface VoiceoverDirection {
+  content: string
+  tone: string
+  voice?: string
+  speed?: string
+  emotion?: string
+}
+
+export interface AdDirectionPackage {
+  creativeBrief: string
+  sceneBridge: string
+  shotList: AdDirectionShot[]
+  voiceover: VoiceoverDirection
+  voiceoverScript: string
+  subtitles: SubtitleLine[]
+  subtitleScript: SubtitleLine[]
+  audioDirection: string
+  visualStyle: string
+  productIntegration: string
+  negativePrompt: string
+}
+
+export interface PromptQualityGate {
+  passed: boolean
+  checkedItems: string[]
+  missingItems: string[]
+  revisionNote?: string
+}
+
+export interface LibtvDirectorPackage {
+  sceneAnalysis: VideoSceneUnderstanding
+  adDirection: AdDirectionPackage
+  promptQualityGate?: PromptQualityGate
 }
 
 export interface GenerateAdResponse {
@@ -63,6 +139,11 @@ export interface GenerateAdResponse {
   adFormat: AdFormat
   adFormatReason: string
   selectedAdvertiser?: SelectedAdvertiser
+  videoSceneUnderstanding?: VideoSceneUnderstanding
+  adDirection?: AdDirectionPackage
+  promptQualityGate?: PromptQualityGate
+  libtvPromptA?: string
+  libtvPromptB?: string
   libtv?: {
     attempted: boolean
     status: 'not-configured' | 'queued' | 'error'

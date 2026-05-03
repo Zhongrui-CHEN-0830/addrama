@@ -2,7 +2,7 @@
 
 import type { VideoFrameInput } from '@/types'
 
-const DEFAULT_FRAME_COUNT = 5
+export const DEFAULT_FRAME_COUNT = 12
 const DEFAULT_MAX_WIDTH = 512
 const JPEG_QUALITY = 0.72
 
@@ -50,17 +50,17 @@ function loadMetadata(video: HTMLVideoElement) {
   })
 }
 
-function frameTimes(duration: number, count: number) {
+export function buildVideoFrameTimes(duration: number, count: number) {
   if (!Number.isFinite(duration) || duration <= 0) return [0]
   const safeCount = Math.max(1, count)
-  const start = Math.min(1, duration * 0.05)
-  const end = Math.max(start, duration - Math.min(1, duration * 0.05))
+  const start = Math.min(1.2, duration * 0.05)
+  const end = Math.max(start, duration - Math.min(1.2, duration * 0.05))
 
-  if (safeCount === 1) return [Math.min(start, duration)]
+  if (safeCount === 1) return [Number(Math.min(start, duration).toFixed(1))]
 
   return Array.from({ length: safeCount }, (_, index) => {
     const ratio = index / (safeCount - 1)
-    return Math.min(duration, start + (end - start) * ratio)
+    return Number(Math.min(duration, start + (end - start) * ratio).toFixed(1))
   })
 }
 
@@ -90,7 +90,7 @@ export async function extractVideoFrames(
     if (!context) throw new Error('Canvas 2D context is unavailable')
 
     const frames: VideoFrameInput[] = []
-    for (const timeSec of frameTimes(video.duration, options.frameCount ?? DEFAULT_FRAME_COUNT)) {
+    for (const timeSec of buildVideoFrameTimes(video.duration, options.frameCount ?? DEFAULT_FRAME_COUNT)) {
       await seekVideo(video, timeSec)
       context.drawImage(video, 0, 0, width, height)
       const dataUrl = canvas.toDataURL('image/jpeg', JPEG_QUALITY)

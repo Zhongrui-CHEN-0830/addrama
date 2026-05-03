@@ -16,6 +16,7 @@ export default function AfterPage() {
   const videoRef = useRef<HTMLVideoElement>(null)
   const adTriggeredRef = useRef(false)
   const [videoUrl, setVideoUrl] = useState('')
+  const [sourceVideoUrl, setSourceVideoUrl] = useState('')
   const [result, setResult] = useState<GenerateAdResponse | null>(null)
   const [analysisError, setAnalysisError] = useState('')
   const [isAnalyzing, setIsAnalyzing] = useState(false)
@@ -57,9 +58,6 @@ export default function AfterPage() {
           const data = await res.json()
           if (data.status === 'done' && data.videoUrl) {
             setAdVideoUrl(data.videoUrl)
-            setVideoUrl(data.videoUrl)
-            setCurrentSec(0)
-            setVideoDuration(0)
             if (pollingRef.current) clearInterval(pollingRef.current)
             setIsPolling(false)
             setPollingMessage('Libtv 广告视频已生成。')
@@ -83,7 +81,10 @@ export default function AfterPage() {
   useEffect(() => {
     const blobUrl = sessionStorage.getItem('addrama_blob_url')
     if (!blobUrl) { router.push('/'); return }
-    window.setTimeout(() => setVideoUrl(blobUrl), 0)
+    window.setTimeout(() => {
+      setSourceVideoUrl(blobUrl)
+      setVideoUrl(blobUrl)
+    }, 0)
 
     const cached = sessionStorage.getItem('addrama_ad_result')
     if (cached) {
@@ -183,8 +184,11 @@ export default function AfterPage() {
 
   function resumeVideo() {
     setShowAdCard(false)
-    const video = videoRef.current
-    if (video && !video.ended) void video.play().catch(() => undefined)
+    if (sourceVideoUrl && videoUrl !== sourceVideoUrl) setVideoUrl(sourceVideoUrl)
+    window.setTimeout(() => {
+      const video = videoRef.current
+      if (video && !video.ended) void video.play().catch(() => undefined)
+    }, 0)
   }
 
   const durationSec = Math.max(60, (result?.rhythmTimeline?.segments?.at(-1)?.endSec ?? videoDuration) || 240)
@@ -219,7 +223,7 @@ export default function AfterPage() {
             className="absolute top-3 left-3 px-3 py-1 rounded-full text-xs font-bold"
             style={{ background: 'var(--teal)', color: '#000' }}
           >
-            Libtv 广告视频已生成，已覆盖原上传视频
+            Libtv 广告视频已生成，可在下方广告卡中预览
           </div>
         )}
 
@@ -228,7 +232,7 @@ export default function AfterPage() {
             className="absolute bottom-3 left-3 right-3 px-3 py-2 rounded-lg text-xs"
             style={{ background: 'rgba(0,0,0,0.72)', border: '1px solid var(--teal)', color: 'var(--teal)' }}
           >
-            Libtv/Seedance 正在生成广告视频；生成后会在此区域直接覆盖原上传视频。
+            Libtv/Seedance 正在生成广告视频；生成后会进入广告卡，不会覆盖原上传视频。
           </div>
         )}
 
@@ -263,7 +267,7 @@ export default function AfterPage() {
           <span className="text-xs tabular-nums" style={{ color: 'var(--muted)' }}>{formatMediaTime(videoDuration)}</span>
         </div>
         <p className="text-[10px] mt-2" style={{ color: 'var(--gold)' }}>
-          推荐广告插入点：{formatMediaTime(insertPoint)}。评委可拖动进度条快速定位，达到插入点后会触发不可跳过广告门禁。{adVideoUrl ? ' 当前播放器内容为 Libtv 生成广告视频。' : ''}
+          推荐广告插入点：{formatMediaTime(insertPoint)}。评委可拖动进度条快速定位，达到插入点后会触发不可跳过广告门禁。{adVideoUrl ? ' Libtv 生成视频已作为广告素材准备好，原片仍保留播放。' : ''}
         </p>
       </div>
 
@@ -300,6 +304,7 @@ export default function AfterPage() {
               adCopy={result.adCopyA}
               interactiveQuestion={result.interactiveQuestion}
               selectedAdvertiser={result.selectedAdvertiser}
+              adVideoUrl={adVideoUrl}
               isLoading={isPolling && !adVideoUrl}
               onInteract={handleAdInteract}
               onComplete={resumeVideo}

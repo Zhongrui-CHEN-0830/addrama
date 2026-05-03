@@ -18,6 +18,7 @@
     "lib/mock-advertisers.ts",
     "lib/product-doc.ts",
     "lib/user-preferences.ts",
+    "lib/video-frames.ts",
     "types/**/*.ts"
   ]
 }

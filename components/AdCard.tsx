@@ -14,12 +14,13 @@ interface AdCardProps {
   adCopy: string
   interactiveQuestion: string
   selectedAdvertiser?: SelectedAdvertiser
+  adVideoUrl?: string
   isLoading?: boolean
   onInteract: (choice: 'interact' | 'watch' | 'later') => void
   onComplete?: () => void
 }
 
-export default function AdCard({ adCopy, interactiveQuestion, selectedAdvertiser, isLoading, onInteract, onComplete }: AdCardProps) {
+export default function AdCard({ adCopy, interactiveQuestion, selectedAdvertiser, adVideoUrl, isLoading, onInteract, onComplete }: AdCardProps) {
   const [startedAtMs] = useState(() => Date.now())
   const [nowMs, setNowMs] = useState(() => Date.now())
   const remaining = getAdGateRemainingSeconds(startedAtMs, nowMs)
@@ -61,12 +62,20 @@ export default function AdCard({ adCopy, interactiveQuestion, selectedAdvertiser
         <p className="text-xs mb-1" style={{ color: 'var(--muted)' }}>{interactiveQuestion}</p>
         <p className="text-[10px] font-mono-syne" style={{ color: 'var(--gold)' }}>
           {isLoading
-            ? 'Libtv/Seedance 视频仍在异步生成；生成后会覆盖上方播放器，当前广告卡展示广告库与 AI 选择理由。'
-            : `该广告至少观看 ${NON_SKIPPABLE_AD_SECONDS} 秒后可继续。`}
+            ? 'Libtv/Seedance 视频仍在异步生成；当前广告卡展示广告库与 AI 选择理由。'
+            : adVideoUrl
+              ? `Libtv 已生成视频广告；至少观看 ${NON_SKIPPABLE_AD_SECONDS} 秒后可继续原片。`
+              : `该广告至少观看 ${NON_SKIPPABLE_AD_SECONDS} 秒后可继续。`}
         </p>
       </div>
 
       <div className="p-4">
+        {adVideoUrl && (
+          <div className="mb-4 rounded-lg overflow-hidden" style={{ border: '1px solid var(--teal)', background: '#000' }}>
+            <video src={adVideoUrl} className="w-full max-h-[360px] object-contain" autoPlay controls playsInline />
+          </div>
+        )}
+
         <div className="flex items-center justify-between mb-3">
           <div>
             <p className="text-[9px] font-bold tracking-widest uppercase" style={{ color: 'var(--muted)' }}>AD LIBRARY</p>
