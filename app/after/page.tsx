@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import AdCard from '@/components/AdCard'
 import UserPreference from '@/components/UserPreference'
 import RhythmTimeline from '@/components/RhythmTimeline'
-import { getErrorMessage, isGenerateAdResponse } from '@/lib/ad-result'
+import { getErrorMessage, isGenerateAdResponse, readGenerateAdResponse } from '@/lib/ad-result'
 import { chooseInsertPoint, formatMediaTime, shouldTriggerNonSkippableAd } from '@/lib/media-gate'
 import { USER_AD_PREFERENCES_STORAGE_KEY } from '@/lib/user-preferences'
 import type { GenerateAdResponse } from '@/types'
@@ -110,13 +110,7 @@ export default function AfterPage() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ blobUrl, frames, userPreferences }),
     })
-      .then(async r => {
-        const data: unknown = await r.json()
-        if (!r.ok || !isGenerateAdResponse(data)) {
-          throw new Error(getErrorMessage(data))
-        }
-        return data
-      })
+      .then(readGenerateAdResponse)
       .then((data: GenerateAdResponse) => {
         setAnalysisError('')
         setResult(data)

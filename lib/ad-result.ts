@@ -52,3 +52,27 @@ export function parseCachedAdResult(raw: string | null): CachedAdResultState {
 
   return { status: 'error', error: getErrorMessage(parsed) }
 }
+
+export async function readGenerateAdResponse(response: Response): Promise<GenerateAdResponse> {
+  const contentType = response.headers.get('content-type') ?? ''
+  const rawText = await response.text()
+
+  if (!contentType.toLowerCase().includes('application/json')) {
+    const snippet = rawText.trim().slice(0, 200)
+    const suffix = snippet ? `：${snippet}` : ''
+    throw new Error(`AI 分析失败：服务端返回了非 JSON 错误响应（HTTP ${response.status}）${suffix}`)
+  }
+
+  let data: unknown
+  try {
+    data = JSON.parse(rawText)
+  } catch {
+    throw new Error(`AI 分析失败：服务端返回了无法解析的 JSON（HTTP ${response.status}）`)
+  }
+
+  if (!response.ok || !isGenerateAdResponse(data)) {
+    throw new Error(getErrorMessage(data))
+  }
+
+  return data
+}

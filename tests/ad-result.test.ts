@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
-import { parseCachedAdResult } from '../lib/ad-result'
+import { parseCachedAdResult, readGenerateAdResponse } from '../lib/ad-result'
 
 const validResult = {
   sessionId: '',
@@ -48,5 +48,17 @@ describe('cached ad result helpers', () => {
     if (state.status === 'ready') {
       assert.equal(state.result.adCopyA, '广告A')
     }
+  })
+
+  it('converts non-JSON API responses into a clear AI analysis error instead of leaking JSON.parse syntax errors', async () => {
+    const response = new Response('An error occurred in the Server Components render.', {
+      status: 500,
+      headers: { 'content-type': 'text/plain; charset=utf-8' },
+    })
+
+    await assert.rejects(
+      () => readGenerateAdResponse(response),
+      /AI 分析失败：服务端返回了非 JSON 错误响应（HTTP 500）/
+    )
   })
 })

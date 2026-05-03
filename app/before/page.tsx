@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import { getRandomAd } from '@/lib/mock-ads'
-import { getErrorMessage, isGenerateAdResponse } from '@/lib/ad-result'
+import { readGenerateAdResponse } from '@/lib/ad-result'
 import { chooseInsertPoint, formatMediaTime, TRADITIONAL_AD_SECONDS } from '@/lib/media-gate'
 import type { MockAd } from '@/types'
 
@@ -52,13 +52,7 @@ export default function BeforePage() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ blobUrl: url, frames, userPreferences }),
     })
-      .then(async r => {
-        const data: unknown = await r.json()
-        if (!r.ok || !isGenerateAdResponse(data)) {
-          throw new Error(getErrorMessage(data))
-        }
-        return data
-      })
+      .then(readGenerateAdResponse)
       .then(data => {
         sessionStorage.setItem('addrama_ad_result', JSON.stringify(data))
       })
