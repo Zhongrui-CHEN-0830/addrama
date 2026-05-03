@@ -6,7 +6,7 @@ import { motion } from 'framer-motion'
 import AiPanel from '@/components/AiPanel'
 import AdFormatSelector from '@/components/AdFormatSelector'
 import RhythmTimeline from '@/components/RhythmTimeline'
-import { parseCachedAdResult } from '@/lib/ad-result'
+import { parseCachedAdResult, readGenerateAdJobStatusResponse, startGenerateAdJobPolling } from '@/lib/ad-result'
 import type { GenerateAdResponse } from '@/types'
 
 export default function AiAnalysisPage() {
@@ -30,21 +30,67 @@ export default function AiAnalysisPage() {
       return true
     }
 
+    async function pollJob(jobId: string) {
+      try {
+        const response = await fetch(`/api/generate-ad/${jobId}`)
+        const state = await readGenerateAdJobStatusResponse(response)
+        if (state.status === 'pending') return false
+        if (state.status === 'done') {
+          sessionStorage.setItem('addrama_ad_result', JSON.stringify(state.result))
+          setResult(state.result)
+          setAnalysisError('')
+        } else {
+          sessionStorage.setItem('addrama_ad_result', JSON.stringify({ error: state.error }))
+          setResult(null)
+          setAnalysisError(state.error)
+        }
+        setIsLoading(false)
+        return true
+      } catch (err) {
+        const message = (err as Error).message || 'AI 分析状态查询失败'
+        sessionStorage.setItem('addrama_ad_result', JSON.stringify({ error: message }))
+        setResult(null)
+        setAnalysisError(message)
+        setIsLoading(false)
+        return true
+      }
+    }
+
     if (applyCachedResult(sessionStorage.getItem('addrama_ad_result'))) return
 
-    // If not ready yet, poll every 2s. Stop with a clear message instead of spinning forever
-    // when the background request never writes a result (for example network/server crash).
+    const jobState = startGenerateAdJobPolling(sessionStorage.getItem('addrama_ad_job'))
+    if (jobState.status === 'missing') {
+      window.setTimeout(() => {
+        setAnalysisError('AI 分析尚未开始：请回到改造前页面重新触发分析。')
+        setIsLoading(false)
+      }, 0)
+      return
+    }
+    if (jobState.status === 'error') {
+      window.setTimeout(() => {
+        setAnalysisError(jobState.error)
+        setIsLoading(false)
+      }, 0)
+      return
+    }
+
+    void pollJob(jobState.jobId).then(done => {
+      if (done) return
+    })
+
     const startedAt = Date.now()
     const interval = setInterval(() => {
-      if (applyCachedResult(sessionStorage.getItem('addrama_ad_result'))) {
-        clearInterval(interval)
-        return
-      }
-      if (Date.now() - startedAt > 120_000) {
-        setAnalysisError('AI 分析超时：后台还没有返回 Kimi 结果。请回到改造前页面重新触发分析，或检查 /api/generate-ad 服务端日志。')
-        setIsLoading(false)
-        clearInterval(interval)
-      }
+      void pollJob(jobState.jobId).then(done => {
+        if (done) {
+          clearInterval(interval)
+          return
+        }
+        if (Date.now() - startedAt > 120_000) {
+          setAnalysisError('AI 分析超时：后台 job 还没有返回 Kimi 结果。请回到改造前页面重新触发分析，或检查 /api/generate-ad/[jobId] 服务端日志。')
+          setIsLoading(false)
+          clearInterval(interval)
+        }
+      })
     }, 2000)
 
     return () => clearInterval(interval)

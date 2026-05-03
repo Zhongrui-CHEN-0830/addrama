@@ -12,6 +12,9 @@
     "tests/**/*.test.ts",
     "lib/ad-result.ts",
     "lib/ad-library.ts",
+    "lib/generate-ad-analysis.ts",
+    "lib/generate-ad-job-store.ts",
+    "lib/generate-ad-media.ts",
     "lib/kimi-response.ts",
     "lib/kimi-url.ts",
     "lib/libtv.ts",
@@ -20,6 +23,8 @@
     "lib/product-doc.ts",
     "lib/user-preferences.ts",
     "lib/video-frames.ts",
+    "app/api/generate-ad/route.ts",
+    "app/api/generate-ad/[jobId]/route.ts",
     "types/**/*.ts"
   ]
 }

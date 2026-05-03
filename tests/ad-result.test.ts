@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 import { parseCachedAdResult, readGenerateAdResponse } from '../lib/ad-result'
+import { prepareKimiMediaInput } from '../lib/generate-ad-media'
+import type { VideoFrameInput } from '../types'
 
 const validResult = {
   sessionId: '',
@@ -60,5 +62,24 @@ describe('cached ad result helpers', () => {
       () => readGenerateAdResponse(response),
       /AI 分析失败：服务端返回了非 JSON 错误响应（HTTP 500）/
     )
+  })
+
+  it('uses extracted frames without re-fetching and base64-encoding the full uploaded video for Kimi', async () => {
+    const frames: VideoFrameInput[] = [
+      { timestampSec: 1.2, imageBase64: 'frame-base64', mediaType: 'image/jpeg' },
+    ]
+    let fetchCalled = false
+
+    const input = await prepareKimiMediaInput({
+      blobUrl: 'https://blob.example/video.mp4',
+      frames,
+      fetcher: (async () => {
+        fetchCalled = true
+        return new Response('should not be fetched')
+      }) as typeof fetch,
+    })
+
+    assert.equal(fetchCalled, false)
+    assert.deepEqual(input, { mediaType: 'video/mp4', mediaBase64: '' })
   })
 })
