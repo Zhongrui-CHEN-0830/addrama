@@ -8,15 +8,9 @@ import UserPreference from '@/components/UserPreference'
 import RhythmTimeline from '@/components/RhythmTimeline'
 import AdvertiserForm from '@/components/AdvertiserForm'
 import { getErrorMessage, isGenerateAdResponse } from '@/lib/ad-result'
+import { chooseInsertPoint, formatMediaTime, shouldTriggerNonSkippableAd } from '@/lib/media-gate'
 import { USER_AD_PREFERENCES_STORAGE_KEY } from '@/lib/user-preferences'
 import type { GenerateAdResponse } from '@/types'
-
-function chooseInsertPoint(result: GenerateAdResponse | null, duration: number) {
-  const recommended = result?.rhythmTimeline?.recommendedInsertPoints?.find(point => point > 0)
-  if (recommended && Number.isFinite(duration) && recommended < duration - 1) return recommended
-  if (Number.isFinite(duration) && duration > 0) return Math.max(3, Math.min(35, duration * 0.5))
-  return 8
-}
 
 export default function AfterPage() {
   const router = useRouter()
@@ -27,41 +21,61 @@ export default function AfterPage() {
   const [analysisError, setAnalysisError] = useState('')
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [currentSec, setCurrentSec] = useState(0)
+  const [videoDuration, setVideoDuration] = useState(0)
   const [showAvoidBanner, setShowAvoidBanner] = useState(false)
   const [showAdCard, setShowAdCard] = useState(false)
   const [adVideoUrl, setAdVideoUrl] = useState('')
   const [isPolling, setIsPolling] = useState(false)
+  const [pollingMessage, setPollingMessage] = useState('')
   const [showPreference, setShowPreference] = useState(false)
   const [preferenceSaved, setPreferenceSaved] = useState(false)
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
-  const startPolling = useCallback((sessionIdA: string, sessionIdB = '') => {
-    const sessionIds = [sessionIdA, sessionIdB].filter(Boolean)
-    if (sessionIds.length === 0) return
+  const startPolling = useCallback((sessionIdA: string, sessionIdB = '', projectUuidA = '', projectUuidB = '') => {
+    const sessions = [
+      { id: sessionIdA, projectUuid: projectUuidA },
+      { id: sessionIdB, projectUuid: projectUuidB },
+    ].filter(item => item.id)
+    if (sessions.length === 0) return
+    if (pollingRef.current) clearInterval(pollingRef.current)
     setIsPolling(true)
+    setPollingMessage('Libtv 已创建任务，正在生成视频…')
     let attempts = 0
 
-    pollingRef.current = setInterval(async () => {
+    const poll = async () => {
       attempts++
-      if (attempts > 24) {
+      if (attempts > 90) {
         if (pollingRef.current) clearInterval(pollingRef.current)
         setIsPolling(false)
+        setPollingMessage('Libtv 生成仍在进行，可稍后刷新或打开项目画布查看。')
         return
       }
 
-      for (const sessionId of sessionIds) {
+      for (const session of sessions) {
         try {
-          const res = await fetch(`/api/ad-status/${sessionId}`)
+          const query = session.projectUuid ? `?projectUuid=${encodeURIComponent(session.projectUuid)}` : ''
+          const res = await fetch(`/api/ad-status/${session.id}${query}`)
           const data = await res.json()
           if (data.status === 'done' && data.videoUrl) {
             setAdVideoUrl(data.videoUrl)
             if (pollingRef.current) clearInterval(pollingRef.current)
             setIsPolling(false)
+            setPollingMessage('Libtv 广告视频已生成。')
             return
           }
-        } catch {}
+          if (data.status === 'error') {
+            setPollingMessage(`Libtv 查询失败：${data.error ?? '未知错误'}`)
+          } else {
+            setPollingMessage(`Libtv 正在生成中，已等待约 ${Math.floor((attempts * 8) / 60)} 分 ${attempts * 8 % 60} 秒…`)
+          }
+        } catch {
+          setPollingMessage('Libtv 状态查询暂时失败，继续重试…')
+        }
       }
-    }, 8000)
+    }
+
+    void poll()
+    pollingRef.current = setInterval(poll, 8000)
   }, [])
 
   useEffect(() => {
@@ -76,7 +90,7 @@ export default function AfterPage() {
         if (isGenerateAdResponse(data)) {
           window.setTimeout(() => {
             setResult(data)
-            startPolling(data.sessionId, data.sessionIdB)
+            startPolling(data.sessionId, data.sessionIdB, data.libtv?.projectUuidA, data.libtv?.projectUuidB)
           }, 0)
           return
         }
@@ -104,7 +118,7 @@ export default function AfterPage() {
         setAnalysisError('')
         setResult(data)
         sessionStorage.setItem('addrama_ad_result', JSON.stringify(data))
-        startPolling(data.sessionId, data.sessionIdB)
+        startPolling(data.sessionId, data.sessionIdB, data.libtv?.projectUuidA, data.libtv?.projectUuidB)
       })
       .catch(err => setAnalysisError((err as Error).message))
       .finally(() => setIsAnalyzing(false))
@@ -116,19 +130,20 @@ export default function AfterPage() {
     const video = videoRef.current
     if (!video) return
 
+    const updateMetadata = () => setVideoDuration(Number.isFinite(video.duration) ? video.duration : 0)
     const handler = () => {
-      setCurrentSec(Math.floor(video.currentTime))
+      setCurrentSec(video.currentTime)
+      updateMetadata()
 
-      const insertPoint = chooseInsertPoint(result, video.duration)
+      const insertPoint = chooseInsertPoint(result?.rhythmTimeline?.recommendedInsertPoints, video.duration)
       const avoidPoint = Math.max(1, insertPoint - 6)
-      if (video.currentTime >= avoidPoint && video.currentTime < avoidPoint + 2) {
-        setShowAvoidBanner(true)
-      }
-      if (video.currentTime >= avoidPoint + 2) {
-        setShowAvoidBanner(false)
-      }
+      setShowAvoidBanner(video.currentTime >= avoidPoint && video.currentTime < avoidPoint + 2)
 
-      if (!adTriggeredRef.current && video.currentTime >= insertPoint) {
+      if (shouldTriggerNonSkippableAd({
+        currentTime: video.currentTime,
+        insertPoint,
+        alreadyTriggered: adTriggeredRef.current,
+      })) {
         adTriggeredRef.current = true
         video.pause()
         setShowAdCard(true)
@@ -142,19 +157,36 @@ export default function AfterPage() {
       }
     }
 
+    video.addEventListener('loadedmetadata', updateMetadata)
     video.addEventListener('timeupdate', handler)
     video.addEventListener('ended', ended)
     return () => {
+      video.removeEventListener('loadedmetadata', updateMetadata)
       video.removeEventListener('timeupdate', handler)
       video.removeEventListener('ended', ended)
     }
-  }, [result])
+  }, [result, videoUrl])
+
+  function handleSeek(value: string) {
+    const next = Number(value)
+    const video = videoRef.current
+    if (!video || !Number.isFinite(next)) return
+    video.currentTime = next
+    setCurrentSec(next)
+  }
 
   function handleAdInteract() {
     setShowPreference(true)
   }
 
-  const durationSec = Math.max(60, result?.rhythmTimeline?.segments?.at(-1)?.endSec ?? 240)
+  function resumeVideo() {
+    setShowAdCard(false)
+    const video = videoRef.current
+    if (video && !video.ended) void video.play().catch(() => undefined)
+  }
+
+  const durationSec = Math.max(60, (result?.rhythmTimeline?.segments?.at(-1)?.endSec ?? videoDuration) || 240)
+  const insertPoint = chooseInsertPoint(result?.rhythmTimeline?.recommendedInsertPoints, videoDuration)
 
   return (
     <main className="min-h-screen p-6 max-w-4xl mx-auto">
@@ -168,9 +200,9 @@ export default function AfterPage() {
         </p>
       </motion.div>
 
-      <div className="relative rounded-xl overflow-hidden mb-4" style={{ background: '#000', aspectRatio: '16/9' }}>
+      <div className="relative rounded-xl overflow-hidden mb-3" style={{ background: '#000', aspectRatio: '16/9' }}>
         {videoUrl && (
-          <video ref={videoRef} src={videoUrl} className="w-full h-full object-contain" autoPlay muted />
+          <video ref={videoRef} src={videoUrl} className="w-full h-full object-contain" autoPlay controls />
         )}
 
         <AnimatePresence>
@@ -188,6 +220,26 @@ export default function AfterPage() {
         </AnimatePresence>
       </div>
 
+      <div className="mb-4 rounded-xl p-3" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+        <div className="flex items-center gap-3">
+          <span className="text-xs tabular-nums" style={{ color: 'var(--muted)' }}>{formatMediaTime(currentSec)}</span>
+          <input
+            type="range"
+            min="0"
+            max={Math.max(1, videoDuration)}
+            value={Math.min(currentSec, Math.max(1, videoDuration))}
+            step="0.1"
+            onChange={event => handleSeek(event.target.value)}
+            className="flex-1 accent-[var(--teal)]"
+            aria-label="视频进度条"
+          />
+          <span className="text-xs tabular-nums" style={{ color: 'var(--muted)' }}>{formatMediaTime(videoDuration)}</span>
+        </div>
+        <p className="text-[10px] mt-2" style={{ color: 'var(--gold)' }}>
+          推荐广告插入点：{formatMediaTime(insertPoint)}。评委可拖动进度条快速定位，达到插入点后会触发不可跳过广告门禁。
+        </p>
+      </div>
+
       {result?.selectedAdvertiser && (
         <div className="mb-4 rounded-xl p-4" style={{ background: 'var(--surface)', border: '1px solid var(--gold)' }}>
           <p className="text-[9px] font-bold tracking-widest uppercase mb-2" style={{ color: 'var(--muted)' }}>AI 匹配广告素材</p>
@@ -196,16 +248,20 @@ export default function AfterPage() {
           </p>
           <p className="text-xs mt-1" style={{ color: 'var(--muted)' }}>{result.selectedAdvertiser.matchReason}</p>
           {result.libtv && (
-            <p className="text-[10px] mt-2" style={{ color: result.libtv.status === 'error' ? 'var(--red)' : 'var(--teal)' }}>
-              Libtv: {result.libtv.status === 'queued' ? '已创建生成任务，正在异步渲染' : result.libtv.error}
-            </p>
+            <div className="text-[10px] mt-2 space-y-1" style={{ color: result.libtv.status === 'error' ? 'var(--red)' : 'var(--teal)' }}>
+              <p>Libtv: {pollingMessage || (result.libtv.status === 'queued' ? '已创建生成任务，正在异步渲染' : result.libtv.error)}</p>
+              <div className="flex gap-3">
+                {result.libtv.projectUrlA && <a href={result.libtv.projectUrlA} target="_blank" className="underline">打开 A 版项目画布</a>}
+                {result.libtv.projectUrlB && <a href={result.libtv.projectUrlB} target="_blank" className="underline">打开 B 版项目画布</a>}
+              </div>
+            </div>
           )}
         </div>
       )}
 
       {result && (
         <div className="mb-4 rounded-xl p-4" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
-          <RhythmTimeline timeline={result.rhythmTimeline} durationSec={durationSec} currentSec={currentSec} />
+          <RhythmTimeline timeline={result.rhythmTimeline} durationSec={durationSec} currentSec={Math.floor(currentSec)} />
         </div>
       )}
 
@@ -224,6 +280,7 @@ export default function AfterPage() {
               videoUrl={adVideoUrl || undefined}
               isLoading={isPolling && !adVideoUrl}
               onInteract={handleAdInteract}
+              onComplete={resumeVideo}
             />
           </div>
         )}

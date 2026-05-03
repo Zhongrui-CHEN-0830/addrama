@@ -53,6 +53,7 @@ export async function POST(request: Request) {
         adCopy: kimiResult.adCopyA,
       }))
       sessionId = sessionA.sessionId
+      libtv.projectUuidA = sessionA.projectUuid
       libtv.projectUrlA = sessionA.projectUrl
 
       const sessionB = await createLibtvSession(buildLibtvMessage({
@@ -61,6 +62,7 @@ export async function POST(request: Request) {
         adCopy: kimiResult.adCopyB,
       }))
       sessionIdB = sessionB.sessionId
+      libtv.projectUuidB = sessionB.projectUuid
       libtv.projectUrlB = sessionB.projectUrl
     } catch (err) {
       libtv = {

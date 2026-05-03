@@ -82,6 +82,10 @@ export function extractGeneratedMediaUrls(messages: Array<{ role?: string; conte
   return [...new Set(urls)]
 }
 
+export function selectBestGeneratedMediaUrl(urls: string[]): string {
+  return urls.find(url => /\.(mp4|webm|mov)(?:$|\?)/i.test(url)) ?? urls[0] ?? ''
+}
+
 export function buildLibtvMessage({
   videoPrompt,
   adFormat,
@@ -155,7 +159,7 @@ export async function queryLibtvSession(
   if (urls.length > 0) {
     return {
       status: 'done',
-      videoUrl: urls.find(url => /\.(mp4|webm|mov)(?:$|\?)/i.test(url)) ?? urls[0],
+      videoUrl: selectBestGeneratedMediaUrl(urls),
       projectUrl,
     }
   }

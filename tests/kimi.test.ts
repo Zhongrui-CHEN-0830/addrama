@@ -12,6 +12,7 @@ import {
   extractGeneratedMediaUrls,
   isLibtvConfigured,
   buildProjectUrl,
+  selectBestGeneratedMediaUrl,
 } from '../lib/libtv'
 import {
   DEFAULT_USER_AD_PREFERENCES,
@@ -116,7 +117,7 @@ describe('libtv helpers', () => {
     )
   })
 
-  it('extracts generated video URLs from assistant text and tool task_result payloads', () => {
+  it('extracts generated media URLs from assistant text and tool task_result payloads', () => {
     const urls = extractGeneratedMediaUrls([
       {
         role: 'assistant',
@@ -142,6 +143,16 @@ describe('libtv helpers', () => {
       'https://libtv-res.liblib.art/claw/p/b.mp4',
       'https://libtv-res.liblib.art/claw/p/c.png',
     ])
+  })
+
+  it('prefers playable video URLs over image URLs for the ad player', () => {
+    assert.equal(
+      selectBestGeneratedMediaUrl([
+        'https://libtv-res.liblib.art/claw/p/a.png',
+        'https://libtv-res.liblib.art/claw/p/b.mp4',
+      ]),
+      'https://libtv-res.liblib.art/claw/p/b.mp4'
+    )
   })
 })
 

@@ -67,6 +67,8 @@ export interface GenerateAdResponse {
     attempted: boolean
     status: 'not-configured' | 'queued' | 'error'
     error?: string
+    projectUuidA?: string
+    projectUuidB?: string
     projectUrlA?: string
     projectUrlB?: string
   }

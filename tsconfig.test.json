@@ -9,10 +9,12 @@
     "outDir": "/tmp/addrama-test-out"
   },
   "include": [
-    "tests/kimi.test.ts",
+    "tests/**/*.test.ts",
     "lib/kimi-url.ts",
     "lib/libtv.ts",
+    "lib/media-gate.ts",
     "lib/mock-advertisers.ts",
+    "lib/product-doc.ts",
     "lib/user-preferences.ts",
     "types/**/*.ts"
   ]

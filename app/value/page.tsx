@@ -96,6 +96,27 @@ export default function ValuePage() {
         </motion.div>
       </div>
 
+      {/* Product doc */}
+      <motion.div
+        initial={{ opacity: 0 }} whileInView={{ opacity: 1 }} viewport={{ once: true }}
+        className="mb-8 rounded-xl p-5 flex flex-col md:flex-row md:items-center md:justify-between gap-4"
+        style={{ background: 'var(--gold-dim)', border: '1px solid var(--gold)' }}
+      >
+        <div>
+          <h3 className="font-bold mb-1" style={{ color: 'var(--gold)' }}>产品说明文档</h3>
+          <p className="text-sm" style={{ color: 'var(--muted)' }}>
+            支持现场编辑保存，方便评委快速理解产品逻辑、demo 范围和商业价值。
+          </p>
+        </div>
+        <button
+          onClick={() => router.push('/product-doc')}
+          className="px-6 py-3 rounded-xl font-bold text-sm transition-all hover:opacity-80 shrink-0"
+          style={{ background: 'var(--surface)', border: '1px solid var(--gold)', color: 'var(--gold)' }}
+        >
+          打开/编辑产品说明 →
+        </button>
+      </motion.div>
+
       {/* Advertiser dashboard */}
       <motion.div
         initial={{ opacity: 0 }} whileInView={{ opacity: 1 }} viewport={{ once: true }}
