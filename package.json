@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test": "npx tsc tests/kimi.test.ts lib/kimi-url.ts --module nodenext --moduleResolution nodenext --target es2022 --types node --skipLibCheck --outDir /tmp/addrama-test-out --noEmit false && node --test /tmp/addrama-test-out/tests/kimi.test.js"
   },
   "dependencies": {
     "@vercel/blob": "^2.3.3",

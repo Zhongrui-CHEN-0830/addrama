@@ -1,15 +1,11 @@
 import type { GenerateAdResponse, AdvertiserInput } from '@/types'
+import { kimiMessagesUrl as buildKimiMessagesUrl } from './kimi-url'
 
-const KIMI_BASE_URL = process.env.KIMI_BASE_URL!
-const KIMI_API_KEY = process.env.KIMI_API_KEY!
+const KIMI_BASE_URL = process.env.KIMI_BASE_URL
+const KIMI_API_KEY = process.env.KIMI_API_KEY
 
-function kimiMessagesUrl(): string {
-  const base = KIMI_BASE_URL.endsWith('/') ? KIMI_BASE_URL : `${KIMI_BASE_URL}/`
-  // Kimi Coding 的 Anthropic-compatible base URL 是 https://api.kimi.com/coding/，
-  // 但 Messages endpoint 仍然在 /v1/messages；Anthropic SDK 会自动拼 /v1/messages，
-  // 这里直接 fetch 时需要显式拼出来。
-  if (base.endsWith('/v1/')) return `${base}messages`
-  return `${base}v1/messages`
+export function kimiMessagesUrl(baseUrl = KIMI_BASE_URL): string {
+  return buildKimiMessagesUrl(baseUrl)
 }
 
 const KIMI_SYSTEM_PROMPT = `你是一个专业的广告策划 AI，擅长分析视频内容并生成场景化广告方案。请严格按照 JSON 格式输出，不要包含任何 Markdown 代码块或额外文字。`
@@ -68,6 +64,10 @@ export async function analyzeVideoAndGenerateAd(
   mediaType: string,
   advertiser: AdvertiserInput
 ): Promise<GenerateAdResponse> {
+  if (!KIMI_API_KEY) {
+    throw new Error('KIMI_API_KEY is required. Set it in Vercel Environment Variables and .env.local.')
+  }
+
   const response = await fetch(kimiMessagesUrl(), {
     method: 'POST',
     headers: {
