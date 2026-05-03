@@ -2,6 +2,7 @@
 
 import { useState, useCallback } from 'react'
 import { upload } from '@vercel/blob/client'
+import { extractVideoFrames } from '@/lib/video-frames'
 
 interface VideoUploadProps {
   onUploadComplete: (blobUrl: string, objectUrl: string) => void
@@ -29,14 +30,18 @@ export default function VideoUpload({ onUploadComplete }: VideoUploadProps) {
 
     try {
       const objectUrl = URL.createObjectURL(file)
-      const blob = await upload(file.name, file, {
-        access: 'public',
-        handleUploadUrl: '/api/upload',
-        onUploadProgress: ({ percentage }) => setProgress(Math.round(percentage)),
-      })
+      const [blob, frames] = await Promise.all([
+        upload(file.name, file, {
+          access: 'public',
+          handleUploadUrl: '/api/upload',
+          onUploadProgress: ({ percentage }) => setProgress(Math.round(percentage)),
+        }),
+        extractVideoFrames(file),
+      ])
 
       sessionStorage.setItem('addrama_blob_url', blob.url)
       sessionStorage.setItem('addrama_video_name', file.name)
+      sessionStorage.setItem('addrama_video_frames', JSON.stringify(frames))
       sessionStorage.removeItem('addrama_ad_result')
       onUploadComplete(blob.url, objectUrl)
     } catch (err) {

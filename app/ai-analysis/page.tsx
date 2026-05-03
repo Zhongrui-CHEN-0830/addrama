@@ -21,11 +21,11 @@ export default function AiAnalysisPage() {
       try {
         const parsed: unknown = JSON.parse(cached)
         if (isGenerateAdResponse(parsed)) {
-          setResult(parsed)
+          window.setTimeout(() => setResult(parsed), 0)
         } else {
-          setAnalysisError(getErrorMessage(parsed))
+          window.setTimeout(() => setAnalysisError(getErrorMessage(parsed)), 0)
         }
-        setIsLoading(false)
+        window.setTimeout(() => setIsLoading(false), 0)
         return
       } catch {}
     }

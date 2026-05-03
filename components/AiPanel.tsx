@@ -16,7 +16,7 @@ const RISK_CONFIG = {
   low: { label: '低风险', color: 'var(--green)' },
 }
 
-export default function AiPanel({ sceneAnalysis, adFormat: _adFormat, adFormatReason, isLoading }: AiPanelProps) {
+export default function AiPanel({ sceneAnalysis, adFormat, adFormatReason, isLoading }: AiPanelProps) {
   if (isLoading) {
     return (
       <div className="rounded-xl p-6 flex flex-col items-center gap-4"
@@ -94,7 +94,7 @@ export default function AiPanel({ sceneAnalysis, adFormat: _adFormat, adFormatRe
         <p className="text-xs mb-3" style={{ color: 'var(--muted)' }}>{sceneAnalysis.reasoning}</p>
         <div className="flex items-start gap-2">
           <span className="text-xs font-bold" style={{ color: 'var(--teal)' }}>推荐广告形式：</span>
-          <span className="text-xs" style={{ color: 'var(--text)' }}>{sceneAnalysis.recommendedAdType}</span>
+          <span className="text-xs" style={{ color: 'var(--text)' }}>{adFormat} · {sceneAnalysis.recommendedAdType}</span>
         </div>
         <div className="flex items-start gap-2 mt-1">
           <span className="text-xs font-bold" style={{ color: 'var(--teal)' }}>选择理由：</span>

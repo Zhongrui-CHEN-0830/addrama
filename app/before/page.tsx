@@ -45,11 +45,13 @@ export default function BeforePage() {
     if (!url) { router.push('/'); return }
     window.setTimeout(() => setVideoUrl(url), 0)
 
+    const frames = JSON.parse(sessionStorage.getItem('addrama_video_frames') ?? '[]')
+
     // Start background Kimi analysis
     fetch('/api/generate-ad', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ blobUrl: url }),
+      body: JSON.stringify({ blobUrl: url, frames }),
     }).then(r => r.json()).then(data => {
       sessionStorage.setItem('addrama_ad_result', JSON.stringify(data))
     }).catch(console.error)

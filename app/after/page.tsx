@@ -53,7 +53,7 @@ export default function AfterPage() {
   useEffect(() => {
     const blobUrl = sessionStorage.getItem('addrama_blob_url')
     if (!blobUrl) { router.push('/'); return }
-    setVideoUrl(blobUrl)
+    window.setTimeout(() => setVideoUrl(blobUrl), 0)
 
     // Load cached result or fetch fresh
     const cached = sessionStorage.getItem('addrama_ad_result')
@@ -61,20 +61,24 @@ export default function AfterPage() {
       try {
         const data: unknown = JSON.parse(cached)
         if (isGenerateAdResponse(data)) {
-          setResult(data)
-          startPolling(data.sessionId)
+          window.setTimeout(() => {
+            setResult(data)
+            startPolling(data.sessionId)
+          }, 0)
           return
         }
-        setAnalysisError(getErrorMessage(data))
+        window.setTimeout(() => setAnalysisError(getErrorMessage(data)), 0)
       } catch {}
     }
 
+    const frames = JSON.parse(sessionStorage.getItem('addrama_video_frames') ?? '[]')
+
     // Fetch fresh
-    setIsAnalyzing(true)
+    window.setTimeout(() => setIsAnalyzing(true), 0)
     fetch('/api/generate-ad', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ blobUrl }),
+      body: JSON.stringify({ blobUrl, frames }),
     })
       .then(async r => {
         const data: unknown = await r.json()

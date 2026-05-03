@@ -1,5 +1,9 @@
-import type { GenerateAdResponse, AdvertiserInput } from '@/types'
-import { kimiMessagesUrl as buildKimiMessagesUrl } from './kimi-url'
+import type { GenerateAdResponse, AdvertiserInput, VideoFrameInput } from '@/types'
+import {
+  buildFrameAnalysisPrompt,
+  buildKimiContentBlocks,
+  kimiMessagesUrl as buildKimiMessagesUrl,
+} from './kimi-url'
 
 const KIMI_BASE_URL = process.env.KIMI_BASE_URL
 const KIMI_API_KEY = process.env.KIMI_API_KEY
@@ -21,7 +25,7 @@ function buildKimiPrompt(advertiser: AdvertiserInput): string {
 - 目标人群：${advertiser.targetAudience}
 - 品牌调性：${advertiser.brandTone}
 
-请输出以下 JSON 结构（不要包含 Markdown 代码块）：
+请输出以下 JSON 结构（不要包含 Markdown 代码块）。如果当前请求没有包含可直接读取的视频帧，请基于广告主信息和“用户上传的视频片段”这一上下文，生成一个可用于演示的场景化广告方案，并在 sceneAnalysis.reasoning 中说明这是基于上传视频上下文的广告决策模拟：
 {
   "adCopyA": "（A版文案，≤40字，场景相关，中文）",
   "adCopyB": "（B版文案，≤40字，不同风格，中文）",
@@ -62,11 +66,24 @@ function buildKimiPrompt(advertiser: AdvertiserInput): string {
 export async function analyzeVideoAndGenerateAd(
   videoBase64: string,
   mediaType: string,
-  advertiser: AdvertiserInput
+  advertiser: AdvertiserInput,
+  frames: VideoFrameInput[] = []
 ): Promise<GenerateAdResponse> {
   if (!KIMI_API_KEY) {
     throw new Error('KIMI_API_KEY is required. Set it in Vercel Environment Variables and .env.local.')
   }
+
+  const basePrompt = buildKimiPrompt(advertiser)
+  const prompt = buildFrameAnalysisPrompt({
+    basePrompt,
+    frameTimes: frames.map(frame => frame.timestampSec),
+  })
+  const messageContent = buildKimiContentBlocks({
+    mediaType,
+    mediaBase64: videoBase64,
+    prompt,
+    frames,
+  })
 
   const response = await fetch(kimiMessagesUrl(), {
     method: 'POST',
@@ -82,20 +99,7 @@ export async function analyzeVideoAndGenerateAd(
       messages: [
         {
           role: 'user',
-          content: [
-            {
-              type: 'video',
-              source: {
-                type: 'base64',
-                media_type: mediaType,
-                data: videoBase64,
-              },
-            },
-            {
-              type: 'text',
-              text: buildKimiPrompt(advertiser),
-            },
-          ],
+          content: messageContent,
         },
       ],
     }),

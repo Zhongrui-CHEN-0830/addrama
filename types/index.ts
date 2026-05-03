@@ -66,3 +66,9 @@ export interface AdvertiserInput {
   targetAudience: string
   brandTone: string
 }
+
+export interface VideoFrameInput {
+  timestampSec: number
+  imageBase64: string
+  mediaType: string
+}

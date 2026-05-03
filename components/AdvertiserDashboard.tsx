@@ -1,5 +1,3 @@
-import MetricCard from './MetricCard'
-
 const METRICS = [
   { value: '2.4M', label: '曝光量', delta: undefined, color: 'var(--text)' },
   { value: '87%', label: '完播率', delta: '↑ 34% vs 传统贴片', positive: true },

@@ -9,7 +9,7 @@ export default function HomePage() {
   const router = useRouter()
   const [blobUrl, setBlobUrl] = useState('')
 
-  function handleUploadComplete(blob: string, _obj: string) {
+  function handleUploadComplete(blob: string) {
     setBlobUrl(blob)
   }
 

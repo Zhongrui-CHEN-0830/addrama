@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { analyzeVideoAndGenerateAd } from '@/lib/kimi'
 import { createLibtvSession } from '@/lib/libtv'
-import type { AdvertiserInput, GenerateAdResponse } from '@/types'
+import type { AdvertiserInput, GenerateAdResponse, VideoFrameInput } from '@/types'
 
 const DEFAULT_ADVERTISER: AdvertiserInput = {
   brandName: '某气泡水品牌',
@@ -13,9 +13,10 @@ const DEFAULT_ADVERTISER: AdvertiserInput = {
 }
 
 export async function POST(request: Request) {
-  const { blobUrl, advertiser = DEFAULT_ADVERTISER } = await request.json() as {
+  const { blobUrl, advertiser = DEFAULT_ADVERTISER, frames = [] } = await request.json() as {
     blobUrl: string
     advertiser?: AdvertiserInput
+    frames?: VideoFrameInput[]
   }
 
   if (!blobUrl) {
@@ -35,7 +36,7 @@ export async function POST(request: Request) {
   // Call Kimi k2.6
   let kimiResult: GenerateAdResponse
   try {
-    kimiResult = await analyzeVideoAndGenerateAd(videoBase64, contentType, advertiser)
+    kimiResult = await analyzeVideoAndGenerateAd(videoBase64, contentType, advertiser, frames)
   } catch (err) {
     return NextResponse.json({ error: `Kimi error: ${(err as Error).message}` }, { status: 502 })
   }
