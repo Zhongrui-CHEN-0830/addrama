@@ -19,6 +19,7 @@ import {
   serializeUserAdPreferences,
   parseUserAdPreferences,
 } from '../lib/user-preferences'
+import { parseKimiJsonResponse } from '../lib/kimi-response'
 
 describe('kimiMessagesUrl', () => {
   it('throws a clear configuration error when KIMI_BASE_URL is missing', () => {
@@ -153,6 +154,46 @@ describe('libtv helpers', () => {
       ]),
       'https://libtv-res.liblib.art/claw/p/b.mp4'
     )
+  })
+})
+
+describe('parseKimiJsonResponse', () => {
+  it('repairs common non-strict JSON returned by Kimi', () => {
+    const parsed = parseKimiJsonResponse(`下面是分析结果：
+{
+  "adCopyA": "英雄同款补水霜",
+  "adCopyB": "上妆前先稳住状态",
+  "videoPromptA": "A cinematic product shot",
+  "videoPromptB": "A softer lifestyle shot",
+  "interactiveQuestion": "想看同款吗？",
+  "fifteenSecScript": "画面：女主梳妆，旁白：关键时刻也要稳住底妆。",
+  "adFormat": "character-match",
+  "adFormatReason": "画面有妆造展示，适合同款推荐",
+  "sceneAnalysis": {
+    "sceneType": "古装剧·梳妆场景",
+    "emotionScore": 42,
+    "tags": ["古装", "梳妆", "美妆"],
+    "advertisingRisk": "low",
+    "recommendedAdType": "角色同款推荐",
+    "reasoning": "场景节奏平缓，商品植入自然",
+  },
+  "rhythmTimeline": {
+    "segments": [
+      {
+        "startSec": 0,
+        "endSec": 8,
+        "risk": "green",
+        "reason": "空镜转场",
+        "emotionScore": 30,
+      },
+    ],
+    "recommendedInsertPoints": [8,],
+  },
+}
+补充说明请忽略。`)
+
+    assert.equal(parsed.adCopyA, '英雄同款补水霜')
+    assert.deepEqual(parsed.rhythmTimeline.recommendedInsertPoints, [8])
   })
 })
 

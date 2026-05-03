@@ -11,6 +11,7 @@
   "include": [
     "tests/**/*.test.ts",
     "lib/ad-library.ts",
+    "lib/kimi-response.ts",
     "lib/kimi-url.ts",
     "lib/libtv.ts",
     "lib/media-gate.ts",

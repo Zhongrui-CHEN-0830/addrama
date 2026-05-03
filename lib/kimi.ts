@@ -1,4 +1,5 @@
 import type { GenerateAdResponse, VideoFrameInput } from '@/types'
+import { parseKimiJsonResponse } from './kimi-response'
 import {
   buildFrameAnalysisPrompt,
   buildKimiContentBlocks,
@@ -73,14 +74,7 @@ export async function analyzeVideoAndGenerateAd(
     throw new Error(`Kimi returned an empty response: ${JSON.stringify(data).slice(0, 500)}`)
   }
 
-  let parsed: Omit<GenerateAdResponse, 'sessionId' | 'sessionIdB'>
-  try {
-    parsed = JSON.parse(content)
-  } catch {
-    const match = content.match(/\{[\s\S]*\}/)
-    if (!match) throw new Error(`Failed to parse Kimi response: ${content.slice(0, 200)}`)
-    parsed = JSON.parse(match[0])
-  }
+  const parsed = parseKimiJsonResponse(content)
 
   return {
     ...parsed,
