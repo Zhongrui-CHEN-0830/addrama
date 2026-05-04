@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import { getRandomAd } from '@/lib/mock-ads'
-import { readGenerateAdJobCreateResponse } from '@/lib/ad-result'
+import { readGenerateAdResponse } from '@/lib/ad-result'
 import { chooseInsertPoint, formatMediaTime, TRADITIONAL_AD_SECONDS } from '@/lib/media-gate'
 import type { MockAd } from '@/types'
 
@@ -52,13 +52,13 @@ export default function BeforePage() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ blobUrl: url, frames, userPreferences }),
     })
-      .then(readGenerateAdJobCreateResponse)
+      .then(readGenerateAdResponse)
       .then(data => {
-        sessionStorage.setItem('addrama_ad_job', JSON.stringify(data))
+        sessionStorage.setItem('addrama_ad_result', JSON.stringify(data))
       })
       .catch(err => {
-        sessionStorage.setItem('addrama_ad_job', JSON.stringify({
-          error: (err as Error).message || 'AI 分析启动失败：未知错误',
+        sessionStorage.setItem('addrama_ad_result', JSON.stringify({
+          error: (err as Error).message || 'AI 分析失败：未知错误',
         }))
         console.error(err)
       })

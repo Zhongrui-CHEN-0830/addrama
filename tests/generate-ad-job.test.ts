@@ -109,21 +109,55 @@ describe('generate-ad async job flow', () => {
     assert.match(state?.error ?? '', /fetch failed|ENOTFOUND|AI 分析失败|AI provider error|HTTP|API key|required/i)
   })
 
-  it('returns a jobId immediately from the create route instead of waiting for analysis to finish', async () => {
-    const response = await createGenerateAdRoute(new Request('https://example.com/api/generate-ad', {
-      method: 'POST',
+  it('returns the generated ad analysis directly from the create route so the frontend does not depend on cached jobId polling', async () => {
+    const originalFetch = globalThis.fetch
+    const originalKimiApiKey = process.env.KIMI_API_KEY
+    const originalKimiBaseUrl = process.env.KIMI_BASE_URL
+    process.env.KIMI_API_KEY = 'test-kimi-key'
+    process.env.KIMI_BASE_URL = 'https://api.kimi.com/coding/'
+    globalThis.fetch = (async () => new Response(JSON.stringify({
+      content: [{
+        text: JSON.stringify({
+          selectedAdvertiserId: 'beverage-yuanqi-sparkling-water',
+          sceneType: '轻松转场',
+          emotionScore: 25,
+          tags: ['轻松', '转场'],
+          advertisingRisk: 'low',
+          recommendedInsertPoints: [6],
+          adFormat: 'buffer-card',
+          adFormatReason: '低打扰',
+          shortReason: '转场节奏适合轻量广告。',
+        }),
+      }],
+    }), {
+      status: 200,
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        blobUrl: 'https://blob.example/video.mp4',
-        frames: [],
-        userPreferences: null,
-      }),
-    }))
+    })) as typeof fetch
 
-    assert.equal(response.status, 202)
-    const body = await response.json()
-    assert.equal(typeof body.jobId, 'string')
-    assert.equal(body.status, 'pending')
+    try {
+      const response = await createGenerateAdRoute(new Request('https://example.com/api/generate-ad', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          blobUrl: 'https://blob.example/video.mp4',
+          frames: [],
+          userPreferences: null,
+        }),
+      }))
+
+      assert.equal(response.status, 200)
+      const body = await response.json()
+      assert.equal(body.adCopyA, '剧情暂停一秒，元气森林轻轻出现')
+      assert.equal(body.sessionId, '')
+      assert.equal(body.status, undefined)
+      assert.equal(body.jobId, undefined)
+    } finally {
+      globalThis.fetch = originalFetch
+      if (originalKimiApiKey === undefined) delete process.env.KIMI_API_KEY
+      else process.env.KIMI_API_KEY = originalKimiApiKey
+      if (originalKimiBaseUrl === undefined) delete process.env.KIMI_BASE_URL
+      else process.env.KIMI_BASE_URL = originalKimiBaseUrl
+    }
   })
 
   it('lets the job status route report pending before the analysis worker finishes', async () => {

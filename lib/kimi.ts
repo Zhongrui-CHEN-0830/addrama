@@ -10,11 +10,9 @@ import {
 import { MOCK_ADVERTISERS } from './mock-advertisers'
 import type { UserAdPreferences } from './user-preferences'
 
-const KIMI_BASE_URL = process.env.KIMI_BASE_URL
-const KIMI_API_KEY = process.env.KIMI_API_KEY
 const KIMI_ANALYSIS_MODE = process.env.KIMI_ANALYSIS_MODE === 'director' ? 'director' : 'light'
 
-export function kimiMessagesUrl(baseUrl = KIMI_BASE_URL): string {
+export function kimiMessagesUrl(baseUrl = process.env.KIMI_BASE_URL): string {
   return buildKimiMessagesUrl(baseUrl)
 }
 
@@ -42,7 +40,8 @@ async function analyzeWithKimi(
   frames: VideoFrameInput[],
   userPreferences?: UserAdPreferences
 ): Promise<GenerateAdResponse> {
-  if (!KIMI_API_KEY) {
+  const kimiApiKey = process.env.KIMI_API_KEY
+  if (!kimiApiKey) {
     throw new Error('KIMI_API_KEY is required. Set it in Vercel Environment Variables and .env.local.')
   }
 
@@ -51,7 +50,7 @@ async function analyzeWithKimi(
   const response = await fetch(kimiMessagesUrl(), {
     method: 'POST',
     headers: {
-      'x-api-key': KIMI_API_KEY,
+      'x-api-key': kimiApiKey,
       'anthropic-version': '2023-06-01',
       'Content-Type': 'application/json',
     },

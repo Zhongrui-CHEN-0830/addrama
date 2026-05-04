@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import AdCard from '@/components/AdCard'
 import UserPreference from '@/components/UserPreference'
 import RhythmTimeline from '@/components/RhythmTimeline'
-import { getErrorMessage, isGenerateAdResponse, readGenerateAdJobCreateResponse, readGenerateAdJobStatusResponse } from '@/lib/ad-result'
+import { getErrorMessage, isGenerateAdResponse, readGenerateAdResponse } from '@/lib/ad-result'
 import { chooseInsertPoint, formatMediaTime, shouldTriggerNonSkippableAd } from '@/lib/media-gate'
 import { USER_AD_PREFERENCES_STORAGE_KEY } from '@/lib/user-preferences'
 import type { GenerateAdResponse } from '@/types'
@@ -174,80 +174,25 @@ export default function AfterPage() {
     const frames = JSON.parse(sessionStorage.getItem('addrama_video_frames') ?? '[]')
     const userPreferences = sessionStorage.getItem(USER_AD_PREFERENCES_STORAGE_KEY)
 
-    const pollGenerateAdJob = (initialJobId: string) => {
-      setIsAnalyzing(true)
-      let activeJobId = initialJobId
-      let attempts = 0
-      const poll = async () => {
-        attempts++
-        try {
-          const response = await fetch(`/api/generate-ad/${activeJobId}`)
-          const state = await readGenerateAdJobStatusResponse(response)
-          if (state.status === 'pending') {
-            if (attempts > 60) {
-              setAnalysisError('AI 分析超时：后台 job 还没有返回 AI 推荐结果。')
-              setIsAnalyzing(false)
-              return true
-            }
-            return false
-          }
-          if (state.status === 'done') {
-            setAnalysisError('')
-            setResult(state.result)
-            sessionStorage.setItem('addrama_ad_result', JSON.stringify(state.result))
-            startLibtvGeneration(state.result)
-          } else {
-            setAnalysisError(state.error)
-            sessionStorage.setItem('addrama_ad_result', JSON.stringify({ error: state.error }))
-          }
-        } catch (err) {
-          const message = (err as Error).message || 'AI 分析状态查询失败'
-          if (message === 'STALE_GENERATE_AD_JOB') {
-            sessionStorage.removeItem('addrama_ad_job')
-            sessionStorage.removeItem('addrama_ad_result')
-            setAnalysisError('检测到旧的 AI 分析 job 已失效，正在自动重新分析…')
-            const retryResponse = await fetch('/api/generate-ad', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ blobUrl, frames, userPreferences }),
-            })
-            const retryJob = await readGenerateAdJobCreateResponse(retryResponse)
-            sessionStorage.setItem('addrama_ad_job', JSON.stringify(retryJob))
-            activeJobId = retryJob.jobId
-            attempts = 0
-            return false
-          }
-          setAnalysisError(message)
-        }
-        setIsAnalyzing(false)
-        return true
-      }
-
-      void poll().then(done => {
-        if (done) return
-        const interval = setInterval(() => {
-          void poll().then(doneNow => {
-            if (doneNow) clearInterval(interval)
-          })
-        }, 2000)
-      })
-    }
-
     window.setTimeout(() => setIsAnalyzing(true), 0)
     fetch('/api/generate-ad', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ blobUrl, frames, userPreferences }),
     })
-      .then(readGenerateAdJobCreateResponse)
-      .then(job => {
-        sessionStorage.setItem('addrama_ad_job', JSON.stringify(job))
-        pollGenerateAdJob(job.jobId)
+      .then(readGenerateAdResponse)
+      .then(data => {
+        setAnalysisError('')
+        setResult(data)
+        sessionStorage.setItem('addrama_ad_result', JSON.stringify(data))
+        startLibtvGeneration(data)
       })
       .catch(err => {
-        setAnalysisError((err as Error).message)
-        setIsAnalyzing(false)
+        const message = (err as Error).message || 'AI 分析失败：未知错误'
+        setAnalysisError(message)
+        sessionStorage.setItem('addrama_ad_result', JSON.stringify({ error: message }))
       })
+      .finally(() => setIsAnalyzing(false))
 
     return () => { if (pollingRef.current) clearInterval(pollingRef.current) }
   }, [router, startPolling, startLibtvGeneration])
