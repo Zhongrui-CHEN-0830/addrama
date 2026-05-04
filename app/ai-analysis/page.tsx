@@ -6,7 +6,7 @@ import { motion } from 'framer-motion'
 import AiPanel from '@/components/AiPanel'
 import AdFormatSelector from '@/components/AdFormatSelector'
 import RhythmTimeline from '@/components/RhythmTimeline'
-import { parseCachedAdResult, readGenerateAdJobStatusResponse, startGenerateAdJobPolling } from '@/lib/ad-result'
+import { parseCachedAdResult, readGenerateAdJobCreateResponse, readGenerateAdJobStatusResponse, startGenerateAdJobPolling } from '@/lib/ad-result'
 import type { GenerateAdResponse } from '@/types'
 
 export default function AiAnalysisPage() {
@@ -16,85 +16,137 @@ export default function AiAnalysisPage() {
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
+    let cancelled = false
+    const blobUrl = sessionStorage.getItem('addrama_blob_url')
+    if (!blobUrl) { router.push('/'); return }
+
+    function safeSetLoading(next: boolean) {
+      if (!cancelled) setIsLoading(next)
+    }
+
+    function safeSetResult(next: GenerateAdResponse | null) {
+      if (!cancelled) setResult(next)
+    }
+
+    function safeSetAnalysisError(next: string) {
+      if (!cancelled) setAnalysisError(next)
+    }
+
+    async function createReplacementJob(reason: string) {
+      safeSetLoading(true)
+      safeSetAnalysisError(reason)
+      sessionStorage.removeItem('addrama_ad_job')
+      sessionStorage.removeItem('addrama_ad_result')
+
+      const frames = JSON.parse(sessionStorage.getItem('addrama_video_frames') ?? '[]')
+      const userPreferences = sessionStorage.getItem('addrama_user_ad_preferences')
+      const response = await fetch('/api/generate-ad', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ blobUrl, frames, userPreferences }),
+      })
+      const job = await readGenerateAdJobCreateResponse(response)
+      sessionStorage.setItem('addrama_ad_job', JSON.stringify(job))
+      return job.jobId
+    }
+
     function applyCachedResult(raw: string | null) {
       const state = parseCachedAdResult(raw)
       if (state.status === 'pending') return false
       if (state.status === 'ready') {
-        setResult(state.result)
-        setAnalysisError('')
+        safeSetResult(state.result)
+        safeSetAnalysisError('')
       } else {
-        setResult(null)
-        setAnalysisError(state.error)
+        safeSetResult(null)
+        safeSetAnalysisError(state.error)
       }
-      setIsLoading(false)
+      safeSetLoading(false)
       return true
     }
 
-    async function pollJob(jobId: string) {
+    async function pollJob(jobId: string): Promise<{ done: true } | { done: false; jobId: string }> {
       try {
         const response = await fetch(`/api/generate-ad/${jobId}`)
         const state = await readGenerateAdJobStatusResponse(response)
-        if (state.status === 'pending') return false
+        if (state.status === 'pending') return { done: false, jobId }
         if (state.status === 'done') {
           sessionStorage.setItem('addrama_ad_result', JSON.stringify(state.result))
-          setResult(state.result)
-          setAnalysisError('')
+          safeSetResult(state.result)
+          safeSetAnalysisError('')
         } else {
           sessionStorage.setItem('addrama_ad_result', JSON.stringify({ error: state.error }))
-          setResult(null)
-          setAnalysisError(state.error)
+          safeSetResult(null)
+          safeSetAnalysisError(state.error)
         }
-        setIsLoading(false)
-        return true
+        safeSetLoading(false)
+        return { done: true }
       } catch (err) {
         const message = (err as Error).message || 'AI 分析状态查询失败'
+        if (message === 'STALE_GENERATE_AD_JOB') {
+          const replacementJobId = await createReplacementJob('检测到旧的 AI 分析 job 已失效，正在自动重新分析…')
+          return { done: false, jobId: replacementJobId }
+        }
         sessionStorage.setItem('addrama_ad_result', JSON.stringify({ error: message }))
-        setResult(null)
-        setAnalysisError(message)
-        setIsLoading(false)
-        return true
+        safeSetResult(null)
+        safeSetAnalysisError(message)
+        safeSetLoading(false)
+        return { done: true }
       }
     }
 
     if (applyCachedResult(sessionStorage.getItem('addrama_ad_result'))) return
 
-    const jobState = startGenerateAdJobPolling(sessionStorage.getItem('addrama_ad_job'))
-    if (jobState.status === 'missing') {
-      window.setTimeout(() => {
-        setAnalysisError('AI 分析尚未开始：请回到改造前页面重新触发分析。')
-        setIsLoading(false)
-      }, 0)
-      return
-    }
-    if (jobState.status === 'error') {
-      window.setTimeout(() => {
-        setAnalysisError(jobState.error)
-        setIsLoading(false)
-      }, 0)
-      return
-    }
-
-    void pollJob(jobState.jobId).then(done => {
-      if (done) return
-    })
-
+    let activeJobId = ''
     const startedAt = Date.now()
     const interval = setInterval(() => {
-      void pollJob(jobState.jobId).then(done => {
-        if (done) {
+      if (!activeJobId) return
+      void pollJob(activeJobId).then(state => {
+        if (state.done) {
           clearInterval(interval)
           return
         }
+        activeJobId = state.jobId
         if (Date.now() - startedAt > 120_000) {
-          setAnalysisError('AI 分析超时：后台 job 还没有返回 Kimi 结果。请回到改造前页面重新触发分析，或检查 /api/generate-ad/[jobId] 服务端日志。')
-          setIsLoading(false)
+          safeSetAnalysisError('AI 分析超时：后台 job 还没有返回 Kimi 结果。请回到改造前页面重新触发分析，或检查 /api/generate-ad/[jobId] 服务端日志。')
+          safeSetLoading(false)
           clearInterval(interval)
         }
       })
     }, 2000)
 
-    return () => clearInterval(interval)
-  }, [])
+    const jobState = startGenerateAdJobPolling(sessionStorage.getItem('addrama_ad_job'))
+    if (jobState.status === 'missing') {
+      void createReplacementJob('AI 分析尚未开始：正在自动启动分析…')
+        .then(jobId => {
+          activeJobId = jobId
+          return pollJob(activeJobId)
+        })
+        .then(state => {
+          if (!state.done) activeJobId = state.jobId
+        })
+        .catch(err => {
+          safeSetAnalysisError((err as Error).message || 'AI 分析启动失败：未知错误')
+          safeSetLoading(false)
+          clearInterval(interval)
+        })
+    } else if (jobState.status === 'error') {
+      window.setTimeout(() => {
+        safeSetAnalysisError(jobState.error)
+        safeSetLoading(false)
+        clearInterval(interval)
+      }, 0)
+    } else {
+      activeJobId = jobState.jobId
+      void pollJob(activeJobId).then(state => {
+        if (!state.done) activeJobId = state.jobId
+      })
+    }
+
+    return () => {
+      cancelled = true
+      clearInterval(interval)
+    }
+  }, [router])
 
   const MOCK_DURATION = 240 // 4 minutes default
 

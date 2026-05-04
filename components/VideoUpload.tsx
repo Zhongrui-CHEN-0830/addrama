@@ -43,6 +43,7 @@ export default function VideoUpload({ onUploadComplete }: VideoUploadProps) {
       sessionStorage.setItem('addrama_video_name', file.name)
       sessionStorage.setItem('addrama_video_frames', JSON.stringify(frames))
       sessionStorage.removeItem('addrama_ad_result')
+      sessionStorage.removeItem('addrama_ad_job')
       onUploadComplete(blob.url, objectUrl)
     } catch (err) {
       setError(`上传失败：${(err as Error).message}`)

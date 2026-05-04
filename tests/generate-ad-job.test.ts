@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import { describe, it, beforeEach } from 'node:test'
+import { isUnknownGenerateAdJobError } from '../lib/ad-result'
 import { createGenerateAdJob, getGenerateAdJob, markGenerateAdJobDone, markGenerateAdJobError, resetGenerateAdJobs } from '../lib/generate-ad-job-store'
 import { POST as createGenerateAdRoute } from '../app/api/generate-ad/route'
 import { GET as getGenerateAdJobRoute } from '../app/api/generate-ad/[jobId]/route'
@@ -85,5 +86,15 @@ describe('generate-ad async job flow', () => {
     const body = await response.json()
     assert.equal(body.status, 'pending')
     assert.equal(body.jobId, job.jobId)
+  })
+
+  it('classifies a missing job lookup as stale so the UI can resubmit instead of showing unknown jobId', async () => {
+    const response = await getGenerateAdJobRoute(new Request('https://example.com/api/generate-ad/stale-job-id'), {
+      params: Promise.resolve({ jobId: 'stale-job-id' }),
+    })
+
+    assert.equal(response.status, 404)
+    const body = await response.json()
+    assert.equal(isUnknownGenerateAdJobError(body), true)
   })
 })

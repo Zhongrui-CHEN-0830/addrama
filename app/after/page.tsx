@@ -104,13 +104,14 @@ export default function AfterPage() {
     const frames = JSON.parse(sessionStorage.getItem('addrama_video_frames') ?? '[]')
     const userPreferences = sessionStorage.getItem(USER_AD_PREFERENCES_STORAGE_KEY)
 
-    const pollGenerateAdJob = (jobId: string) => {
+    const pollGenerateAdJob = (initialJobId: string) => {
       setIsAnalyzing(true)
+      let activeJobId = initialJobId
       let attempts = 0
       const poll = async () => {
         attempts++
         try {
-          const response = await fetch(`/api/generate-ad/${jobId}`)
+          const response = await fetch(`/api/generate-ad/${activeJobId}`)
           const state = await readGenerateAdJobStatusResponse(response)
           if (state.status === 'pending') {
             if (attempts > 60) {
@@ -130,7 +131,23 @@ export default function AfterPage() {
             sessionStorage.setItem('addrama_ad_result', JSON.stringify({ error: state.error }))
           }
         } catch (err) {
-          setAnalysisError((err as Error).message)
+          const message = (err as Error).message || 'AI 分析状态查询失败'
+          if (message === 'STALE_GENERATE_AD_JOB') {
+            sessionStorage.removeItem('addrama_ad_job')
+            sessionStorage.removeItem('addrama_ad_result')
+            setAnalysisError('检测到旧的 AI 分析 job 已失效，正在自动重新分析…')
+            const retryResponse = await fetch('/api/generate-ad', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ blobUrl, frames, userPreferences }),
+            })
+            const retryJob = await readGenerateAdJobCreateResponse(retryResponse)
+            sessionStorage.setItem('addrama_ad_job', JSON.stringify(retryJob))
+            activeJobId = retryJob.jobId
+            attempts = 0
+            return false
+          }
+          setAnalysisError(message)
         }
         setIsAnalyzing(false)
         return true

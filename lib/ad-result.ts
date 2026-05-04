@@ -55,6 +55,15 @@ export function isGenerateAdJobStatusResponse(value: unknown): value is Generate
   if (obj.status === 'error') return typeof (obj as { error?: unknown }).error === 'string'
   return false
 }
+export function isUnknownGenerateAdJobError(value: unknown): boolean {
+  return !!(
+    value &&
+    typeof value === 'object' &&
+    (value as { status?: unknown }).status === 'error' &&
+    (value as { error?: unknown }).error === 'unknown jobId'
+  )
+}
+
 export function getErrorMessage(value: unknown): string {
   if (value && typeof value === 'object' && 'error' in value) {
     const error = (value as { error?: unknown }).error
@@ -140,6 +149,10 @@ export async function readGenerateAdJobCreateResponse(response: Response): Promi
 
 export async function readGenerateAdJobStatusResponse(response: Response): Promise<GenerateAdJobStatusResponse> {
   const data = await readJsonResponse(response)
+
+  if (response.status === 404 && isUnknownGenerateAdJobError(data)) {
+    throw new Error('STALE_GENERATE_AD_JOB')
+  }
 
   if (!response.ok || !isGenerateAdJobStatusResponse(data)) {
     throw new Error(getErrorMessage(data))
