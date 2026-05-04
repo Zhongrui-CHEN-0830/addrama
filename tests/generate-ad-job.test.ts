@@ -1,7 +1,8 @@
+import { createHash } from 'node:crypto'
 import assert from 'node:assert/strict'
 import { describe, it, beforeEach } from 'node:test'
 
-import { createGenerateAdJob, getGenerateAdJob, markGenerateAdJobDone, markGenerateAdJobError, resetGenerateAdJobs, updateGenerateAdJobStage } from '../lib/generate-ad-job-store'
+import { createGenerateAdJob, getGenerateAdJob, markGenerateAdJobDone, markGenerateAdJobError, resetGenerateAdJobs, resetPersistedGenerateAdJobsForTests, serializeGenerateAdJob, updateGenerateAdJobStage } from '../lib/generate-ad-job-store'
 import { isUnknownGenerateAdJobError } from '../lib/ad-result'
 import { runGenerateAdJob } from '../lib/generate-ad-worker'
 import { POST as createGenerateAdRoute } from '../app/api/generate-ad/route'
@@ -35,6 +36,7 @@ function makeAnalysisResult(overrides: Partial<GenerateAdResponse> = {}): Genera
 describe('generate-ad async job flow', () => {
   beforeEach(() => {
     resetGenerateAdJobs()
+    resetPersistedGenerateAdJobsForTests()
   })
 
   it('creates a pending job record with a unique jobId', () => {
@@ -56,6 +58,22 @@ describe('generate-ad async job flow', () => {
     assert.equal(updated?.result?.sessionId, '')
     assert.equal(updated?.result?.sessionIdB, undefined)
     assert.equal(updated?.result?.libtv?.attempted ?? false, false)
+  })
+
+  it('persists completed jobs by stable input key so a serverless instance without memory can recover Kimi success instead of 404/pending forever', () => {
+    const input = { blobUrl: 'https://blob.example/video.mp4', frames: [], userPreferences: null }
+    const job = createGenerateAdJob(input)
+    const result = makeAnalysisResult({ adCopyA: 'Kimi 成功结果' })
+    markGenerateAdJobDone(job.jobId, result)
+
+    resetGenerateAdJobs()
+
+    const stableJobId = createHash('sha256').update(JSON.stringify(input)).digest('hex').slice(0, 32)
+    const recovered = getGenerateAdJob(stableJobId)
+    assert.equal(recovered?.status, 'done')
+    assert.equal(recovered?.stage, 'done')
+    assert.equal(recovered?.result?.adCopyA, 'Kimi 成功结果')
+    assert.equal(serializeGenerateAdJob(recovered!).jobId, stableJobId)
   })
 
   it('marks a job as error and exposes the failure reason', () => {
