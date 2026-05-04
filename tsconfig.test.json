@@ -15,6 +15,7 @@
     "lib/generate-ad-analysis.ts",
     "lib/generate-ad-job-store.ts",
     "lib/generate-ad-media.ts",
+    "lib/generate-ad-worker.ts",
     "lib/kimi-response.ts",
     "lib/kimi-url.ts",
     "lib/libtv.ts",

@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict'
 import { describe, it, beforeEach } from 'node:test'
 import { isUnknownGenerateAdJobError } from '../lib/ad-result'
-import { createGenerateAdJob, getGenerateAdJob, markGenerateAdJobDone, markGenerateAdJobError, resetGenerateAdJobs } from '../lib/generate-ad-job-store'
+import { createGenerateAdJob, getGenerateAdJob, markGenerateAdJobDone, markGenerateAdJobError, resetGenerateAdJobs, updateGenerateAdJobStage } from '../lib/generate-ad-job-store'
+import { runGenerateAdJob } from '../lib/generate-ad-worker'
 import { POST as createGenerateAdRoute } from '../app/api/generate-ad/route'
 import { GET as getGenerateAdJobRoute } from '../app/api/generate-ad/[jobId]/route'
 
@@ -56,6 +57,29 @@ describe('generate-ad async job flow', () => {
     const updated = getGenerateAdJob(job.jobId)
     assert.equal(updated?.status, 'error')
     assert.equal(updated?.error, 'Kimi error: timeout')
+  })
+
+  it('exposes stage and updatedAt diagnostics while a job is still pending', () => {
+    const job = createGenerateAdJob({ blobUrl: 'https://blob.example/video.mp4', frames: [], userPreferences: null })
+
+    updateGenerateAdJobStage(job.jobId, 'calling_kimi')
+    const state = getGenerateAdJob(job.jobId)
+
+    assert.equal(state?.status, 'pending')
+    assert.equal(state?.stage, 'calling_kimi')
+    assert.equal(typeof state?.updatedAt, 'number')
+    assert.ok((state?.updatedAt ?? 0) >= job.updatedAt)
+  })
+
+  it('marks the job as error when the worker throws so polling does not stay pending forever', async () => {
+    const job = createGenerateAdJob({ blobUrl: 'https://blob.invalid/video.mp4', frames: [], userPreferences: null })
+
+    await runGenerateAdJob(job.jobId, job.input)
+
+    const state = getGenerateAdJob(job.jobId)
+    assert.equal(state?.status, 'error')
+    assert.equal(state?.stage, 'error')
+    assert.match(state?.error ?? '', /fetch failed|ENOTFOUND|AI 分析失败|Kimi error|HTTP/i)
   })
 
   it('returns a jobId immediately from the create route instead of waiting for analysis to finish', async () => {

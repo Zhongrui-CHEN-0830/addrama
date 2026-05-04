@@ -6,7 +6,7 @@ import { motion } from 'framer-motion'
 import AiPanel from '@/components/AiPanel'
 import AdFormatSelector from '@/components/AdFormatSelector'
 import RhythmTimeline from '@/components/RhythmTimeline'
-import { parseCachedAdResult, readGenerateAdJobCreateResponse, readGenerateAdJobStatusResponse, startGenerateAdJobPolling } from '@/lib/ad-result'
+import { parseCachedAdResult, readGenerateAdJobCreateResponse, readGenerateAdJobStatusResponse, startGenerateAdJobPolling, describeGenerateAdPendingState } from '@/lib/ad-result'
 import type { GenerateAdResponse } from '@/types'
 
 export default function AiAnalysisPage() {
@@ -68,7 +68,10 @@ export default function AiAnalysisPage() {
       try {
         const response = await fetch(`/api/generate-ad/${jobId}`)
         const state = await readGenerateAdJobStatusResponse(response)
-        if (state.status === 'pending') return { done: false, jobId }
+        if (state.status === 'pending') {
+          safeSetAnalysisError(`AI 分析进行中：${describeGenerateAdPendingState(state)}`)
+          return { done: false, jobId }
+        }
         if (state.status === 'done') {
           sessionStorage.setItem('addrama_ad_result', JSON.stringify(state.result))
           safeSetResult(state.result)
@@ -107,7 +110,7 @@ export default function AiAnalysisPage() {
         }
         activeJobId = state.jobId
         if (Date.now() - startedAt > 120_000) {
-          safeSetAnalysisError('AI 分析超时：后台 job 还没有返回 Kimi 结果。请回到改造前页面重新触发分析，或检查 /api/generate-ad/[jobId] 服务端日志。')
+          safeSetAnalysisError(`AI 分析超时：后台 job 仍未结束。${activeJobId ? `jobId=${activeJobId}，` : ''}请刷新本页或返回重新触发；如果阶段长时间停在 calling_kimi，说明 Kimi 请求或响应解析没有在服务端函数时限内完成。`)
           safeSetLoading(false)
           clearInterval(interval)
         }

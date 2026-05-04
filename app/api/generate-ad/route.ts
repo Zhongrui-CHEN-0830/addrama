@@ -1,20 +1,23 @@
+import { after } from 'next/server'
 import { NextResponse } from 'next/server'
 import type { VideoFrameInput } from '../../../types'
-import { generateAdAnalysis } from '../../../lib/generate-ad-analysis'
-import { createGenerateAdJob, markGenerateAdJobDone, markGenerateAdJobError } from '../../../lib/generate-ad-job-store'
+import { createGenerateAdJob } from '../../../lib/generate-ad-job-store'
+import { runGenerateAdJob } from '../../../lib/generate-ad-worker'
 
-export const maxDuration = 10
+export const maxDuration = 60
 
-function runGenerateAdJob(jobId: string, input: { blobUrl: string; frames: VideoFrameInput[]; userPreferences: unknown }) {
-  void generateAdAnalysis(input)
-    .then(result => {
-      markGenerateAdJobDone(jobId, result)
+function scheduleGenerateAdJob(task: () => Promise<void>) {
+  try {
+    after(task)
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    if (!message.includes('outside a request scope')) throw err
+    // Unit tests call route handlers directly without Next.js request async storage.
+    // Fall back to a microtask so route behavior remains testable outside Next.
+    queueMicrotask(() => {
+      void task()
     })
-    .catch(err => {
-      const message = (err as Error).message || 'AI 分析失败：未知错误'
-      markGenerateAdJobError(jobId, message)
-      console.error('[generate-ad] job failed:', message)
-    })
+  }
 }
 
 export async function POST(request: Request) {
@@ -29,7 +32,7 @@ export async function POST(request: Request) {
   }
 
   const job = createGenerateAdJob({ blobUrl, frames, userPreferences })
-  runGenerateAdJob(job.jobId, job.input)
+  scheduleGenerateAdJob(() => runGenerateAdJob(job.jobId, job.input))
 
-  return NextResponse.json({ jobId: job.jobId, status: job.status }, { status: 202 })
+  return NextResponse.json({ jobId: job.jobId, status: job.status, stage: job.stage, updatedAt: job.updatedAt }, { status: 202 })
 }

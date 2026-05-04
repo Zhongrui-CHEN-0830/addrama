@@ -10,6 +10,7 @@ export type GenerateAdJob = {
   jobId: string
   createdAt: number
   updatedAt: number
+  stage: GenerateAdJobStage
   input: GenerateAdJobInput
 } & (
   | { status: 'pending'; result?: never; error?: never }
@@ -18,6 +19,8 @@ export type GenerateAdJob = {
 )
 
 type GenerateAdJobMap = Map<string, GenerateAdJob>
+
+export type GenerateAdJobStage = 'queued' | 'preparing_media' | 'calling_kimi' | 'building_libtv_message' | 'creating_libtv_session_a' | 'creating_libtv_session_b' | 'done' | 'error'
 
 const globalForGenerateAdJobs = globalThis as typeof globalThis & {
   __addramaGenerateAdJobs?: GenerateAdJobMap
@@ -40,6 +43,7 @@ export function createGenerateAdJob(input: GenerateAdJobInput): GenerateAdJob {
     status: 'pending',
     createdAt: now,
     updatedAt: now,
+    stage: 'queued',
     input,
   }
   jobs.set(job.jobId, job)
@@ -50,6 +54,18 @@ export function getGenerateAdJob(jobId: string): GenerateAdJob | undefined {
   return jobs.get(jobId)
 }
 
+export function updateGenerateAdJobStage(jobId: string, stage: GenerateAdJobStage): GenerateAdJob | undefined {
+  const existing = jobs.get(jobId)
+  if (!existing || existing.status !== 'pending') return existing
+  const updated: GenerateAdJob = {
+    ...existing,
+    stage,
+    updatedAt: Date.now(),
+  }
+  jobs.set(jobId, updated)
+  return updated
+}
+
 export function markGenerateAdJobDone(jobId: string, result: GenerateAdResponse): GenerateAdJob | undefined {
   const existing = jobs.get(jobId)
   if (!existing) return undefined
@@ -58,6 +74,7 @@ export function markGenerateAdJobDone(jobId: string, result: GenerateAdResponse)
     status: 'done',
     createdAt: existing.createdAt,
     updatedAt: Date.now(),
+    stage: 'done',
     input: existing.input,
     result,
   }
@@ -73,6 +90,7 @@ export function markGenerateAdJobError(jobId: string, error: string): GenerateAd
     status: 'error',
     createdAt: existing.createdAt,
     updatedAt: Date.now(),
+    stage: 'error',
     input: existing.input,
     error,
   }
@@ -82,12 +100,12 @@ export function markGenerateAdJobError(jobId: string, error: string): GenerateAd
 
 export function serializeGenerateAdJob(job: GenerateAdJob) {
   if (job.status === 'done') {
-    return { jobId: job.jobId, status: job.status, result: job.result }
+    return { jobId: job.jobId, status: job.status, stage: job.stage, updatedAt: job.updatedAt, result: job.result }
   }
   if (job.status === 'error') {
-    return { jobId: job.jobId, status: job.status, error: job.error }
+    return { jobId: job.jobId, status: job.status, stage: job.stage, updatedAt: job.updatedAt, error: job.error }
   }
-  return { jobId: job.jobId, status: job.status }
+  return { jobId: job.jobId, status: job.status, stage: job.stage, updatedAt: job.updatedAt }
 }
 
 export function resetGenerateAdJobs(): void {

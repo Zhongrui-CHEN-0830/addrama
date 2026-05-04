@@ -5,6 +5,8 @@ import { MOCK_ADVERTISERS } from '../lib/mock-advertisers'
 import type { GenerateAdResponse, VideoFrameInput } from '../types'
 import { prepareKimiMediaInput } from '../lib/generate-ad-media'
 
+type GenerateAdAnalysisStage = 'preparing_media' | 'calling_kimi' | 'building_libtv_message' | 'creating_libtv_session_a' | 'creating_libtv_session_b'
+
 export interface GenerateAdAnalysisInput {
   blobUrl: string
   frames?: VideoFrameInput[]
@@ -15,7 +17,10 @@ export async function generateAdAnalysis({
   blobUrl,
   frames = [],
   userPreferences = null,
-}: GenerateAdAnalysisInput): Promise<GenerateAdResponse> {
+}: GenerateAdAnalysisInput,
+  onStage: (stage: GenerateAdAnalysisStage) => void = () => undefined
+): Promise<GenerateAdResponse> {
+  onStage('preparing_media')
   const mediaInput = await prepareKimiMediaInput({ blobUrl, frames })
   const parsedPreferences = parseUserAdPreferences(
     typeof userPreferences === 'string' ? userPreferences : JSON.stringify(userPreferences)
@@ -23,6 +28,7 @@ export async function generateAdAnalysis({
 
   let kimiResult: GenerateAdResponse
   try {
+    onStage('calling_kimi')
     kimiResult = await analyzeVideoAndGenerateAd(mediaInput.mediaBase64, mediaInput.mediaType, frames, parsedPreferences)
   } catch (err) {
     throw new Error(`Kimi error: ${(err as Error).message}`)
@@ -36,6 +42,7 @@ export async function generateAdAnalysis({
     error: 'LIBTV_ACCESS_KEY is missing; returning Kimi-generated ad card without video rendering.',
   }
 
+  onStage('building_libtv_message')
   const selectedAdvertiser = MOCK_ADVERTISERS.find(
     asset => asset.id === kimiResult.selectedAdvertiser?.id
   )
@@ -49,6 +56,7 @@ export async function generateAdAnalysis({
   if (isLibtvConfigured()) {
     libtv = { attempted: true, status: 'queued' }
     try {
+      onStage('creating_libtv_session_a')
       const sessionA = await createLibtvSession(buildLibtvMessage({
         videoPrompt: kimiResult.videoPromptA,
         libtvPrompt: kimiResult.libtvPromptA,
@@ -64,6 +72,7 @@ export async function generateAdAnalysis({
       libtv.projectUuidA = sessionA.projectUuid
       libtv.projectUrlA = sessionA.projectUrl
 
+      onStage('creating_libtv_session_b')
       const sessionB = await createLibtvSession(buildLibtvMessage({
         videoPrompt: kimiResult.videoPromptB,
         libtvPrompt: kimiResult.libtvPromptB,

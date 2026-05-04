@@ -1,11 +1,17 @@
 import type { GenerateAdResponse } from '@/types'
 
-export type GenerateAdJobCreateResponse = { jobId: string; status: 'pending' }
+export type GenerateAdJobCreateResponse = { jobId: string; status: 'pending'; stage?: string; updatedAt?: number }
 
 export type GenerateAdJobStatusResponse =
-  | { jobId: string; status: 'pending' }
-  | { jobId: string; status: 'done'; result: GenerateAdResponse }
-  | { jobId: string; status: 'error'; error: string }
+  | { jobId: string; status: 'pending'; stage?: string; updatedAt?: number }
+  | { jobId: string; status: 'done'; stage?: string; updatedAt?: number; result: GenerateAdResponse }
+  | { jobId: string; status: 'error'; stage?: string; updatedAt?: number; error: string }
+
+export function describeGenerateAdPendingState(state: Extract<GenerateAdJobStatusResponse, { status: 'pending' }>): string {
+  const stageText = state.stage ? `当前阶段：${state.stage}` : '当前阶段：unknown'
+  const ageText = state.updatedAt ? `，最近更新：${Math.round((Date.now() - state.updatedAt) / 1000)} 秒前` : ''
+  return `${stageText}${ageText}`
+}
 
 export type CachedGenerateAdJobState =
   | { status: 'ready'; jobId: string }
