@@ -128,7 +128,7 @@ export interface LibtvDirectorPackage {
 }
 
 export interface GenerateAdResponse {
-  sessionId: string
+  sessionId?: string
   sessionIdB?: string
   adCopyA: string
   adCopyB: string

@@ -5,6 +5,7 @@ import {
   buildKimiContentBlocks,
   buildFrameAnalysisPrompt,
   buildKimiPrompt,
+  buildLightKimiPrompt,
   kimiMessagesUrl,
 } from '../lib/kimi-url'
 import { MOCK_ADVERTISERS } from '../lib/mock-advertisers'
@@ -20,7 +21,7 @@ import {
   serializeUserAdPreferences,
   parseUserAdPreferences,
 } from '../lib/user-preferences'
-import { parseKimiJsonResponse } from '../lib/kimi-response'
+import { parseKimiJsonResponse, normalizeLightKimiResult } from '../lib/kimi-response'
 import { buildVideoFrameTimes, DEFAULT_FRAME_COUNT } from '../lib/video-frames'
 
 describe('kimiMessagesUrl', () => {
@@ -92,16 +93,34 @@ describe('buildFrameAnalysisPrompt', () => {
 })
 
 describe('video frame extraction helpers', () => {
-  it('samples more frames at a higher default frequency for deeper Kimi scene understanding', () => {
-    assert.equal(DEFAULT_FRAME_COUNT, 12)
+  it('uses a lighter default frame budget for lower Kimi multimodal cost', () => {
+    assert.equal(DEFAULT_FRAME_COUNT, 4)
     assert.deepEqual(buildVideoFrameTimes(24, DEFAULT_FRAME_COUNT), [
-      1.2, 3.2, 5.1, 7.1, 9.1, 11, 13, 14.9, 16.9, 18.9, 20.8, 22.8,
+      1.2, 8.4, 15.6, 22.8,
     ])
   })
 })
 
 describe('buildKimiPrompt', () => {
+  it('builds a compact light prompt that only asks Kimi for scene understanding and ad selection', () => {
+    const prompt = buildLightKimiPrompt({
+      adLibrary: MOCK_ADVERTISERS,
+      userPreferences: DEFAULT_USER_AD_PREFERENCES,
+    })
 
+    assert.match(prompt, /轻量模式/)
+    assert.match(prompt, /selectedAdvertiserId/)
+    assert.match(prompt, /recommendedInsertPoints/)
+    assert.match(prompt, /adFormat/)
+    assert.match(prompt, /beauty-florasis-lipstick/)
+    assert.match(prompt, /beverage-yuanqi-sparkling-water/)
+    assert.doesNotMatch(prompt, /sourceMaterial/)
+    assert.doesNotMatch(prompt, /assetVisualElements/)
+    assert.doesNotMatch(prompt, /forbiddenRepresentations/)
+    assert.doesNotMatch(prompt, /libtvPromptA/)
+    assert.doesNotMatch(prompt, /shotList/)
+    assert.ok(prompt.length < 5000, `light prompt too large: ${prompt.length}`)
+  })
 
   it('uses the five demo advertiser assets from the desktop material file', () => {
     assert.deepEqual(MOCK_ADVERTISERS.map(asset => asset.id), [
@@ -328,6 +347,34 @@ describe('libtv helpers', () => {
 })
 
 describe('parseKimiJsonResponse', () => {
+  it('normalizes a light Kimi result into the full frontend and Libtv response contract', () => {
+    const parsed = parseKimiJsonResponse(`{
+      "selectedAdvertiserId": "beauty-florasis-lipstick",
+      "sceneType": "古装剧·梳妆转场",
+      "emotionScore": 38,
+      "tags": ["古装", "梳妆", "铜镜"],
+      "advertisingRisk": "low",
+      "recommendedInsertPoints": [8.4],
+      "adFormat": "character-match",
+      "adFormatReason": "妆造与国风口红素材匹配",
+      "shortReason": "镜前空镜节奏平缓，适合同款灵感推荐"
+    }`)
+
+    const normalized = normalizeLightKimiResult(parsed, MOCK_ADVERTISERS)
+
+    assert.equal(normalized.selectedAdvertiser?.brandName, '花西子')
+    assert.equal(normalized.adFormat, 'character-match')
+    assert.match(normalized.adCopyA, /花西子|东方雕花口红|同款灵感/)
+    assert.match(normalized.videoPromptA, /cinematic/i)
+    assert.match(normalized.libtvPromptA ?? '', /中文导演要求/)
+    assert.match(normalized.libtvPromptA ?? '', /English visual generation prompt/)
+    assert.match(normalized.libtvPromptA ?? '', /mp4\/webm\/mov/)
+    assert.match(normalized.fifteenSecScript, /0-3秒/)
+    assert.equal(normalized.sceneAnalysis.sceneType, '古装剧·梳妆转场')
+    assert.deepEqual(normalized.rhythmTimeline.recommendedInsertPoints, [8.4])
+    assert.equal(normalized.promptQualityGate?.passed, true)
+  })
+
   it('repairs common non-strict JSON returned by Kimi', () => {
     const parsed = parseKimiJsonResponse(`下面是分析结果：
 {

@@ -16,6 +16,10 @@
     "lib/generate-ad-job-store.ts",
     "lib/generate-ad-media.ts",
     "lib/generate-ad-worker.ts",
+    "lib/generate-libtv-ad.ts",
+    "lib/generate-libtv-ad-worker.ts",
+    "lib/kimi.ts",
+    "lib/libtv-ad-job-store.ts",
     "lib/kimi-response.ts",
     "lib/kimi-url.ts",
     "lib/libtv.ts",
@@ -26,6 +30,8 @@
     "lib/video-frames.ts",
     "app/api/generate-ad/route.ts",
     "app/api/generate-ad/[jobId]/route.ts",
+    "app/api/generate-libtv-ad/route.ts",
+    "app/api/generate-libtv-ad/[jobId]/route.ts",
     "types/**/*.ts"
   ]
 }

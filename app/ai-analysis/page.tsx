@@ -110,7 +110,7 @@ export default function AiAnalysisPage() {
         }
         activeJobId = state.jobId
         if (Date.now() - startedAt > 120_000) {
-          safeSetAnalysisError(`AI 分析超时：后台 job 仍未结束。${activeJobId ? `jobId=${activeJobId}，` : ''}请刷新本页或返回重新触发；如果阶段长时间停在 calling_kimi，说明 Kimi 请求或响应解析没有在服务端函数时限内完成。`)
+          safeSetAnalysisError(`AI 分析超时：后台 job 仍未结束。${activeJobId ? `jobId=${activeJobId}，` : ''}请刷新本页或返回重新触发；如果阶段长时间停在 calling_ai/calling_kimi，说明 AI 请求或响应解析没有在服务端函数时限内完成。`)
           safeSetLoading(false)
           clearInterval(interval)
         }

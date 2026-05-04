@@ -17,8 +17,9 @@ export async function runGenerateAdJob(
   input: GenerateAdWorkerInput
 ): Promise<void> {
   try {
-    updateGenerateAdJobStage(jobId, 'preparing_media')
-    const result = await generateAdAnalysis(input, stage => updateGenerateAdJobStage(jobId, stage))
+    const result = await generateAdAnalysis(input, stage => {
+      updateGenerateAdJobStage(jobId, stage === 'calling_kimi' ? 'calling_ai' : stage)
+    })
     markGenerateAdJobDone(jobId, result)
   } catch (err) {
     const message = (err as Error).message || 'AI 分析失败：未知错误'

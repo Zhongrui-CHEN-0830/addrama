@@ -2,9 +2,9 @@
 
 import type { VideoFrameInput } from '@/types'
 
-export const DEFAULT_FRAME_COUNT = 12
-const DEFAULT_MAX_WIDTH = 512
-const JPEG_QUALITY = 0.72
+export const DEFAULT_FRAME_COUNT = 4
+const DEFAULT_MAX_WIDTH = 384
+const JPEG_QUALITY = 0.6
 
 function seekVideo(video: HTMLVideoElement, timeSec: number) {
   return new Promise<void>((resolve, reject) => {

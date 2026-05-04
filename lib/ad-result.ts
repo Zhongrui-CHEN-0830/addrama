@@ -27,7 +27,7 @@ export function isGenerateAdResponse(value: unknown): value is GenerateAdRespons
   if (!value || typeof value !== 'object') return false
   const obj = value as Partial<GenerateAdResponse>
   return (
-    typeof obj.sessionId === 'string' &&
+    (typeof obj.sessionId === 'undefined' || typeof obj.sessionId === 'string') &&
     typeof obj.adCopyA === 'string' &&
     typeof obj.adCopyB === 'string' &&
     typeof obj.videoPromptA === 'string' &&

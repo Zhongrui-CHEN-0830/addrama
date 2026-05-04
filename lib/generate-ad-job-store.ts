@@ -20,7 +20,7 @@ export type GenerateAdJob = {
 
 type GenerateAdJobMap = Map<string, GenerateAdJob>
 
-export type GenerateAdJobStage = 'queued' | 'preparing_media' | 'calling_kimi' | 'building_libtv_message' | 'creating_libtv_session_a' | 'creating_libtv_session_b' | 'done' | 'error'
+export type GenerateAdJobStage = 'queued' | 'preparing_media' | 'calling_ai' | 'calling_kimi' | 'done' | 'error'
 
 const globalForGenerateAdJobs = globalThis as typeof globalThis & {
   __addramaGenerateAdJobs?: GenerateAdJobMap

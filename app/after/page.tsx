@@ -78,6 +78,75 @@ export default function AfterPage() {
     pollingRef.current = setInterval(poll, 8000)
   }, [])
 
+  const startLibtvGeneration = useCallback((analysis: GenerateAdResponse) => {
+    fetch('/api/generate-libtv-ad', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ analysis }),
+    })
+      .then(async response => {
+        const data = await response.json()
+        if (!response.ok || typeof data.jobId !== 'string') {
+          throw new Error(typeof data.error === 'string' ? data.error : 'Libtv 生成任务启动失败')
+        }
+        setPollingMessage('Libtv 导演提示词已提交，正在创建视频生成任务…')
+        setIsPolling(true)
+        let attempts = 0
+        const poll = async () => {
+          attempts++
+          const statusResponse = await fetch(`/api/generate-libtv-ad/${data.jobId}`)
+          const state = await statusResponse.json()
+          if (state.status === 'pending') {
+            setPollingMessage(`Libtv 任务准备中：${state.stage ?? 'queued'}…`)
+            return false
+          }
+          if (state.status === 'done') {
+            const generated = state.result ?? {}
+            const merged = {
+              ...analysis,
+              sessionId: generated.sessionId ?? '',
+              sessionIdB: generated.sessionIdB ?? '',
+              libtv: {
+                attempted: Boolean(generated.attempted),
+                status: generated.status ?? 'error',
+                error: generated.error,
+                projectUuidA: generated.projectUuidA,
+                projectUuidB: generated.projectUuidB,
+                projectUrlA: generated.projectUrlA,
+                projectUrlB: generated.projectUrlB,
+              },
+            }
+            setResult(merged)
+            sessionStorage.setItem('addrama_ad_result', JSON.stringify(merged))
+            startPolling(merged.sessionId ?? '', merged.sessionIdB, merged.libtv?.projectUuidA, merged.libtv?.projectUuidB)
+            if (!merged.sessionId && generated.status === 'not-configured') {
+              setIsPolling(false)
+              setPollingMessage(generated.error ?? 'Libtv 未配置，当前 demo 展示 AI 广告卡。')
+            }
+            return true
+          }
+          setIsPolling(false)
+          setPollingMessage(`Libtv 生成失败：${state.error ?? '未知错误'}`)
+          return true
+        }
+        void poll().then(done => {
+          if (done) return
+          const interval = setInterval(() => {
+            void poll().then(doneNow => {
+              if (doneNow || attempts > 60) clearInterval(interval)
+            }).catch(err => {
+              setPollingMessage((err as Error).message || 'Libtv 状态查询失败')
+              clearInterval(interval)
+            })
+          }, 2000)
+        })
+      })
+      .catch(err => {
+        setIsPolling(false)
+        setPollingMessage((err as Error).message || 'Libtv 生成任务启动失败')
+      })
+  }, [startPolling])
+
   useEffect(() => {
     const blobUrl = sessionStorage.getItem('addrama_blob_url')
     if (!blobUrl) { router.push('/'); return }
@@ -93,7 +162,8 @@ export default function AfterPage() {
         if (isGenerateAdResponse(data)) {
           window.setTimeout(() => {
             setResult(data)
-            startPolling(data.sessionId, data.sessionIdB, data.libtv?.projectUuidA, data.libtv?.projectUuidB)
+            if (!data.libtv?.attempted) startLibtvGeneration(data)
+            else startPolling(data.sessionId ?? '', data.sessionIdB, data.libtv.projectUuidA, data.libtv.projectUuidB)
           }, 0)
           return
         }
@@ -115,7 +185,7 @@ export default function AfterPage() {
           const state = await readGenerateAdJobStatusResponse(response)
           if (state.status === 'pending') {
             if (attempts > 60) {
-              setAnalysisError('AI 分析超时：后台 job 还没有返回 Kimi 结果。')
+              setAnalysisError('AI 分析超时：后台 job 还没有返回 AI 推荐结果。')
               setIsAnalyzing(false)
               return true
             }
@@ -125,7 +195,7 @@ export default function AfterPage() {
             setAnalysisError('')
             setResult(state.result)
             sessionStorage.setItem('addrama_ad_result', JSON.stringify(state.result))
-            startPolling(state.result.sessionId, state.result.sessionIdB, state.result.libtv?.projectUuidA, state.result.libtv?.projectUuidB)
+            startLibtvGeneration(state.result)
           } else {
             setAnalysisError(state.error)
             sessionStorage.setItem('addrama_ad_result', JSON.stringify({ error: state.error }))
@@ -180,7 +250,7 @@ export default function AfterPage() {
       })
 
     return () => { if (pollingRef.current) clearInterval(pollingRef.current) }
-  }, [router, startPolling])
+  }, [router, startPolling, startLibtvGeneration])
 
   useEffect(() => {
     const video = videoRef.current
@@ -406,3 +476,5 @@ export default function AfterPage() {
     </main>
   )
 }
+
+

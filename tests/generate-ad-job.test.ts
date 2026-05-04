@@ -1,10 +1,36 @@
 import assert from 'node:assert/strict'
 import { describe, it, beforeEach } from 'node:test'
-import { isUnknownGenerateAdJobError } from '../lib/ad-result'
+
 import { createGenerateAdJob, getGenerateAdJob, markGenerateAdJobDone, markGenerateAdJobError, resetGenerateAdJobs, updateGenerateAdJobStage } from '../lib/generate-ad-job-store'
+import { isUnknownGenerateAdJobError } from '../lib/ad-result'
 import { runGenerateAdJob } from '../lib/generate-ad-worker'
 import { POST as createGenerateAdRoute } from '../app/api/generate-ad/route'
 import { GET as getGenerateAdJobRoute } from '../app/api/generate-ad/[jobId]/route'
+import type { GenerateAdResponse } from '../types'
+
+function makeAnalysisResult(overrides: Partial<GenerateAdResponse> = {}): GenerateAdResponse {
+  return {
+    sessionId: '',
+    adCopyA: '广告A',
+    adCopyB: '广告B',
+    videoPromptA: 'prompt A',
+    videoPromptB: 'prompt B',
+    interactiveQuestion: '看一看？',
+    fifteenSecScript: '0-3s intro',
+    adFormat: 'buffer-card',
+    adFormatReason: 'reason',
+    sceneAnalysis: {
+      sceneType: '转场',
+      emotionScore: 20,
+      tags: ['转场'],
+      advertisingRisk: 'low',
+      recommendedAdType: 'buffer-card',
+      reasoning: '好时机',
+    },
+    rhythmTimeline: { segments: [], recommendedInsertPoints: [] },
+    ...overrides,
+  }
+}
 
 describe('generate-ad async job flow', () => {
   beforeEach(() => {
@@ -20,33 +46,16 @@ describe('generate-ad async job flow', () => {
     assert.equal(getGenerateAdJob(job.jobId)?.status, 'pending')
   })
 
-  it('marks a job as done and stores the generated response payload', () => {
+  it('marks a job as done and stores the AI-only recommendation payload without Libtv sessions', () => {
     const job = createGenerateAdJob({ blobUrl: 'https://blob.example/video.mp4', frames: [], userPreferences: null })
 
-    markGenerateAdJobDone(job.jobId, {
-      sessionId: 'session-a',
-      adCopyA: '广告A',
-      adCopyB: '广告B',
-      videoPromptA: 'prompt A',
-      videoPromptB: 'prompt B',
-      interactiveQuestion: '看一看？',
-      fifteenSecScript: '0-3s intro',
-      adFormat: 'buffer-card',
-      adFormatReason: 'reason',
-      sceneAnalysis: {
-        sceneType: '转场',
-        emotionScore: 20,
-        tags: ['转场'],
-        advertisingRisk: 'low',
-        recommendedAdType: 'buffer-card',
-        reasoning: '好时机',
-      },
-      rhythmTimeline: { segments: [], recommendedInsertPoints: [] },
-    })
+    markGenerateAdJobDone(job.jobId, makeAnalysisResult())
 
     const updated = getGenerateAdJob(job.jobId)
     assert.equal(updated?.status, 'done')
-    assert.equal(updated?.result?.sessionId, 'session-a')
+    assert.equal(updated?.result?.sessionId, '')
+    assert.equal(updated?.result?.sessionIdB, undefined)
+    assert.equal(updated?.result?.libtv?.attempted ?? false, false)
   })
 
   it('marks a job as error and exposes the failure reason', () => {
@@ -62,11 +71,11 @@ describe('generate-ad async job flow', () => {
   it('exposes stage and updatedAt diagnostics while a job is still pending', () => {
     const job = createGenerateAdJob({ blobUrl: 'https://blob.example/video.mp4', frames: [], userPreferences: null })
 
-    updateGenerateAdJobStage(job.jobId, 'calling_kimi')
+    updateGenerateAdJobStage(job.jobId, 'calling_ai')
     const state = getGenerateAdJob(job.jobId)
 
     assert.equal(state?.status, 'pending')
-    assert.equal(state?.stage, 'calling_kimi')
+    assert.equal(state?.stage, 'calling_ai')
     assert.equal(typeof state?.updatedAt, 'number')
     assert.ok((state?.updatedAt ?? 0) >= job.updatedAt)
   })
@@ -79,7 +88,7 @@ describe('generate-ad async job flow', () => {
     const state = getGenerateAdJob(job.jobId)
     assert.equal(state?.status, 'error')
     assert.equal(state?.stage, 'error')
-    assert.match(state?.error ?? '', /fetch failed|ENOTFOUND|AI 分析失败|Kimi error|HTTP/i)
+    assert.match(state?.error ?? '', /fetch failed|ENOTFOUND|AI 分析失败|AI provider error|HTTP|API key|required/i)
   })
 
   it('returns a jobId immediately from the create route instead of waiting for analysis to finish', async () => {

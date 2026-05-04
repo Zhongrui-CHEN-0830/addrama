@@ -27,6 +27,53 @@ export function kimiMessagesUrl(baseUrl: string | undefined): string {
   return `${base}v1/messages`
 }
 
+export function buildLightKimiPrompt({
+  adLibrary,
+  userPreferences,
+}: {
+  adLibrary: AdvertiserAsset[]
+  userPreferences?: UserAdPreferences
+}): string {
+  const compactLibrary = adLibrary.map(asset => ({
+    id: asset.id,
+    brandName: asset.brandName,
+    productName: asset.productName,
+    industry: asset.industry,
+    suitableScenes: asset.suitableScenes,
+    suitableFormats: asset.suitableFormats,
+    keySellingPoint: asset.keySellingPoint,
+    brandTone: asset.brandTone,
+  }))
+  const preferenceJson = JSON.stringify(userPreferences ?? null, null, 2)
+
+  return `你是 AdDrama 的轻量模式视频广告分析 AI。目标是用最少 token 完成：理解视频关键帧、选择一个广告素材、判断广告插入风险和广告形式。不要生成 Libtv 导演提示词、完整分镜、长文案或大 JSON。
+
+紧凑广告库（只能从这些 id 中选择，不得编造品牌）：
+${JSON.stringify(compactLibrary, null, 2)}
+
+本次 demo 用户偏好：
+${preferenceJson}
+
+请只输出 JSON，不要 Markdown，不要解释推理过程。字段如下：
+{
+  "selectedAdvertiserId": "广告库中的 id",
+  "sceneType": "场景类型，≤20字",
+  "emotionScore": 0,
+  "tags": ["标签1", "标签2", "标签3"],
+  "advertisingRisk": "low|medium|high",
+  "recommendedInsertPoints": [0],
+  "adFormat": "short|buffer-card|character-match|interactive|drama-style|end-card",
+  "adFormatReason": "为什么选择该形式，≤40字",
+  "shortReason": "为什么这个广告素材适合当前剧情，≤60字"
+}
+
+规则：
+- selectedAdvertiserId 必须来自紧凑广告库。
+- recommendedInsertPoints 优先选择抽帧时间点附近的 green/yellow 位置。
+- adFormat 必须结合画面内容、广告素材 suitableFormats 和用户偏好选择。
+- 只做轻量判断；导演提示、镜头列表、旁白、字幕、负面约束 将由本地模板生成。`
+}
+
 export function buildKimiPrompt({
   adLibrary,
   userPreferences,
